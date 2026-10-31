@@ -1,0 +1,22 @@
+# Render Blueprint for the bridge PBN replay page (Web Service).
+# Push this folder to a GitHub repo, then in Render: New -> Web Service
+# -> pick the repo. Render detects render.yaml and pre-fills these values.
+# If you create the service by hand instead, use the same values:
+#   Environment: Docker, Plan: Free, Health Check Path: /health.
+#
+# Region: ohio is closest to Toronto; change it to oregon / frankfurt
+# if most users are elsewhere. Free services sleep after 15 minutes
+# idle and take about a minute to wake up; that is a free-tier limit,
+# not a bug in this service.
+
+services:
+  - type: web
+    name: bridge-pbn
+    env: docker
+    dockerfilePath: ./Dockerfile
+    plan: free
+    region: ohio
+    healthCheckPath: /health
+    envVars:
+      - key: PYTHONUNBUFFERED
+        value: "1"
