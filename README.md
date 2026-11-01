@@ -7,6 +7,29 @@ team-match view, Par contract line, double-dummy table in
 N / S / E / W order, per-card +n / = / −n badges, and the
 first-tab DDS service setting.
 
+## 更新已有部署 (update an existing deployment)
+
+**If you already have a Render service from the previous version
+of this package, do NOT delete it and do NOT create a new one.**
+
+You only need to replace `index.html` in your GitHub repo and
+push. Keep your existing `pbn/` folder exactly as it is —
+including any PBN file you renamed there — and do not touch
+`server.py`, `Dockerfile`, or `render.yaml` unless you changed
+them on purpose. Render auto-redeploys the **same service, with
+the same URL**, once it sees the new commit.
+
+If you have **not** created a service yet, ignore this section
+and follow **“Deploy to Render (free)”** below, which is the
+full first-time setup.
+
+**What is new in this version:** the first-tab title now shows
+the loaded PBN filename without the `.pbn` suffix (for example
+`2610273252192026DreamlandCup_full` instead of “队名列表”),
+falling back to “队名列表” when nothing is loaded. Everything
+else — the PBN selector, the two-tab view, Par, DDS settings,
+and badges — is unchanged.
+
 ## What is in this folder
 
 | File | What it is |

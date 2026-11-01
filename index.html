@@ -369,8 +369,8 @@
 
       /* ---------- matches (team list) ---------- */
       .matches-head{margin-bottom:14px}
-      .matches-title{font-size:24px;margin:0 0 4px;letter-spacing:.01em}
-      .matches-title span{font-size:16px;color:var(--ink-2);font-weight:600}
+      .matches-title{font-size:24px;margin:0 0 4px;letter-spacing:.01em;overflow-wrap:anywhere}
+      .matches-title #matchesCount{font-size:16px;color:var(--ink-2);font-weight:600}
       .matches-sub{margin:0 0 12px;color:var(--ink-2);font-size:14px}
       table.match-table{width:100%;border-collapse:collapse;font-size:15px}
       table.match-table th{
@@ -546,7 +546,7 @@
       <!-- ============ view 1: matches parsed from the uploaded PBN ============ -->
       <section id="viewMatches" aria-label="队式赛比赛成绩汇总">
         <div class="matches-head">
-          <h1 class="matches-title">队名列表 <span id="matchesCount"></span></h1>
+          <h1 class="matches-title"><span id="matchesTitleName">队名列表</span> <span id="matchesCount"></span></h1>
           <p class="matches-sub" id="matchesSub">请先在下方上传 PBN 文件或粘贴 PBN 内容；上传后，这里会从文件里解析出所有队伍及其比赛。</p>
         </div>
         <div class="empty-state" id="matchEmpty">
@@ -555,7 +555,7 @@
           <div class="es-actions"><button class="btn primary" id="btnEmptyUpload" type="button">去上传 PBN 文件</button></div>
         </div>
         <div class="board-table-wrap hidden" id="matchTableWrap">
-          <table class="match-table" aria-label="从 PBN 文件解析出的队名列表">
+          <table class="match-table" id="matchTable" aria-label="从 PBN 文件解析出的比赛列表">
             <thead>
               <tr>
                 <th scope="col">主队</th>
@@ -704,6 +704,16 @@
       var ix = s.indexOf("#");
       if(ix >= 0) s = s.slice(0, ix);
       return s.trim();
+    }
+    // Display name for the heading on tab 1: the loaded PBN file's
+    // name with a trailing ".pbn" extension removed (case-insensitive).
+    // Non-file sources (paste / built-in sample) have no extension to
+    // strip and are shown as-is; with nothing loaded, the heading
+    // falls back to the original "队名列表" placeholder.
+    function pbnDisplayName(sourceName){
+      if(!sourceName) return "队名列表";
+      var s = String(sourceName).trim().replace(/\.pbn$/i, "");
+      return s || "队名列表";
     }
     // Board-number key for one record of the current match; records
     // without a Board tag fall back to their 1-based position.
@@ -2667,6 +2677,8 @@
       var has = fileMatches.length > 0;
       $("matchEmpty").classList.toggle("hidden", has);
       $("matchTableWrap").classList.toggle("hidden", !has);
+      $("matchesTitleName").textContent = has ? pbnDisplayName(loadedSourceName) : "队名列表";
+      if($("matchTable")) $("matchTable").setAttribute("aria-label", has ? "从 PBN 文件「" + pbnDisplayName(loadedSourceName) + "」解析出的比赛列表" : "从 PBN 文件解析出的比赛列表");
       $("matchesCount").textContent = has ? "（共 " + fileMatches.length + " 场比赛）" : "";
       $("matchesSub").textContent = has
         ? "以下比赛解析自文件「" + loadedSourceName + "」。点击一场比赛，进入第二个标签页只看这场比赛的牌；上传 / 粘贴入口只在本页下方。"
