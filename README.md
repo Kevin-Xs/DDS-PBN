@@ -14,12 +14,25 @@ first-tab DDS service setting.
 **If you already have a Render service from the previous version
 of this package, do NOT delete it and do NOT create a new one.**
 
-You only need to replace `index.html` in your GitHub repo and
-push. Keep your existing `pbn/` folder exactly as it is —
-including any PBN file you renamed there — and do not touch
-`server.py`, `Dockerfile`, or `render.yaml` unless you changed
-them on purpose. Render auto-redeploys the **same service, with
-the same URL**, once it sees the new commit.
+**⚠️ This update is different from the usual one: replacing
+`index.html` alone is NOT enough this time.** This version adds
+the default-file marker (`pbn/default.txt`), which only works
+if the server returns the new `default` field. So for an
+existing service, push all three changes together:
+`index.html` (new selector logic) **and** `server.py` (new
+`/api/pbn-list` fields) **and** add `pbn/default.txt` (see
+“默认文件（default.txt）” below). The page alone will not
+break on an old server — it falls back to the first file — but
+the marker will not work until `server.py` is updated.
+Render auto-redeploys the **same service, with the same URL**,
+once it sees the new commit.
+
+For later updates that do not touch `server.py`, the old rule
+applies again: replace only `index.html` and push, keeping
+your existing `pbn/` folder exactly as it is — including any
+PBN file you renamed there — and do not touch `server.py`,
+`Dockerfile`, or `render.yaml` unless you changed them on
+purpose.
 
 Do NOT delete the separate DDS service `https://dds-jt98.onrender.com` — it is a different service from this page service, and deleting it breaks the per-card badges (the built-in WASM fallback may be incomplete).
 
@@ -27,7 +40,60 @@ If you have **not** created a service yet, ignore this section
 and follow **“Deploy to Render (free)”** below, which is the
 full first-time setup.
 
+## 默认文件（default.txt）(choose which PBN file opens by default)
+
+When several `.pbn` files sit in `pbn/`, the page no longer
+has to open the alphabetically first one. Create (or edit)
+`pbn/default.txt` with **one line: the exact PBN filename to
+auto-load**, for example:
+
+```
+2610273252192026DreamlandCup_full.pbn
+```
+
+How it works and what to remember:
+
+- (a) To set the default, write that one line into
+  `pbn/default.txt` and push. The dropdown still lists every
+  `.pbn` file in filename order, and the marked file is
+  pre-selected and auto-loaded on open; picking another file
+  in the dropdown and clicking “载入所选文件” still works as
+  before.
+- (b) To change the default later, you only need to edit
+  `default.txt` and push — **no page rebuild, no `index.html`
+  or `server.py` change**. The new default takes effect on the
+  next Render deploy.
+- (c) Deleting `default.txt` reverts to the old behaviour:
+  the first file alphabetically is auto-loaded.
+- (d) If the marker names a file that is not in `pbn/`, the
+  page warns in the status line (“default.txt 指定的默认文件
+  … 未找到”) and loads the first file instead — it never
+  shows a blank page.
+- (e) For an **existing** deployed service, this update
+  requires pushing the new `index.html` **and** the new
+  `server.py`, plus adding `pbn/default.txt` — replacing
+  `index.html` alone is NOT enough this time, because the
+  server must return the `default` field (the page alone
+  falls back to the first file if the server is old, so it
+  will not break, but the marker will not work until
+  `server.py` is updated).
+- (f) GitHub web tip: navigate **inside** the `pbn/` folder
+  first, then create `default.txt` there. If you create it
+  from the repo root, it lands in the repo root and will be
+  ignored — the server only reads `pbn/default.txt`.
+- Parsing is tolerant: UTF-8 with optional BOM, the first
+  non-empty line that does not start with `#`, surrounding
+  whitespace stripped, and a missing `.pbn` suffix is added
+  for matching (so `b` matches `b.pbn`). `default.txt`
+  itself never appears in the dropdown, and
+  `/pbn/default.txt` is rejected (400).
+- Keep your existing `pbn/*.pbn` files. Do NOT delete or
+  recreate the page service, and do NOT delete the separate
+  DDS service `https://dds-jt98.onrender.com`.
+
 **本次更新 (what is new in this version, vs the previous Render package):**
+- 本次重新打包 (2026-11-01, 针对上一个 zip 被反馈缺少 default.txt): index.html / server.py 内容与上一版相同（index.html 是从最新 artifact 导出重新 transplant 默认感知选择器，server.py 未变），但 zip 改为真实文件而非符号链接，解压后 pbn/default.txt 一定存在（内容为 2610273252192026DreamlandCup_full.pbn）；已有服务仍按上文三件套（index.html + server.py + pbn/default.txt）推送。
+- 本次更新 (2026-11-01, vs 上一版 Render 包): 新增默认文件标记 `pbn/default.txt`: 第一 tab 的下拉仍按文件名顺序列出所有 `.pbn` 文件, 但打开页面时自动载入 `default.txt` 里指定的那一个 (预选中并载入); 改默认以后只需改 `default.txt` 并 push, 不用改页面; 删掉 `default.txt` 就回到按文件名第一个自动载入; 标记指向不存在的文件时页面提示并回退到第一个文件。注意: 已有服务这次必须同时推新 `index.html` 和新 `server.py` 并加上 `pbn/default.txt`, 只换 `index.html` 不够 (旧服务器没有 `default` 字段时页面会回退到第一个文件, 不会坏, 但标记不起作用)。
 - 本次更新 (2026-11-01, vs 上一版 Render 包): 新增第四个 tab “X-IMP排名” (排在 “同牌比较” 之后): 覆盖当前载入的整个 PBN 文件的全部牌、全部桌, 复用 “同牌比较” 的 X-IMP 口径 (Score 标签取 NS 原始分, EW x 记负, 不用 ScoreIMP; 每桌 X-IMP = 与其他有得分桌的分差按标准 IMP 表换算求和 ÷ (桌数 − 1), 坐 EW 的一对取相反数; 单桌 / 无得分副不计入), Pair 按无序两人组合合并 (名字去 # 后缀, 坐 NS / EW 都算同一对), 每对的平均 X-IMP = X-IMP 总和 ÷ 计入副数, 按平均从高到低排名; 队伍按坐向确定且一致时才显示, 否则留空; 顶部标题行与其他 tab 一样用 PBN 文件名 (去掉 .pbn 后缀), 未载入文件时只提示去第一页上传。
 - 本次更新 (2026-11-01, vs v1 Render package): 同牌比较新增 “X-IMP” 列 (Score 列之后): 对同一副牌, 本桌 NS 原始分与每一其他桌得分的差值按标准 IMP 表逐一换算、求和, 再除以 (有得分的桌数 − 1), 显示带正负号的两位小数; 只有一桌或无有效得分时显示 —, 且缺得分的行不参与其他桌的计算; 排序仍按 NS 原始分从高到低。
 - 第一 tab 比赛表去掉最后一列 “看牌面”: 表只剩主队 / 客队 / 副数 / IMP / VP 五列, 整行可点击 (回车也可) 进入第二页, 与原来点 “看牌面” 效果相同。

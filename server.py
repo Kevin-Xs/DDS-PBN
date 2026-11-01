@@ -5,8 +5,22 @@ Python standard library only -- no third-party packages.
 
 Endpoints:
   GET /                -> index.html
-  GET /api/pbn-list    -> {"files": [{"name", "size", "url"}, ...]},
+  GET /api/pbn-list    -> {"files": [{"name", "size", "url"}, ...],
+                          "default": <filename or null>,
+                          "default_requested": <filename or null>},
                           sorted by filename, *.pbn files directly in pbn/
+  Default file marker: pbn/default.txt (one line, the exact PBN
+  filename to auto-load, e.g. 2610273252192026DreamlandCup_full.pbn).
+  Parsing is tolerant: UTF-8 with optional BOM, first non-empty
+  line that does not start with '#', surrounding whitespace
+  stripped, and a missing .pbn suffix is added for matching.
+  "default" is the marker name only if that file is actually in
+  the list, otherwise null; "default_requested" is the parsed
+  marker name (with .pbn normalised) if a marker file exists,
+  otherwise null. With no marker file both are null and the page
+  falls back to the first file, exactly as before. default.txt
+  itself is never listed as a PBN file and /pbn/default.txt is
+  still rejected (400, non-.pbn).
   GET /pbn/<name>      -> that .pbn file as text/plain; charset=utf-8
   GET /health          -> {"ready": true}  (Render health check)
   GET /<static file>   -> other static files in the package root
@@ -56,6 +70,29 @@ def pbn_files():
     return out
 
 
+def default_pbn_requested():
+    """Parse pbn/default.txt, or return None if absent/unusable.
+
+    Tolerant parsing: UTF-8 with optional BOM, first non-empty
+    line that does not start with '#', surrounding whitespace
+    stripped, missing .pbn suffix added for matching. Returns
+    None if there is no marker file or no usable line.
+    """
+    marker = PBN_DIR / "default.txt"
+    try:
+        text = marker.read_bytes().decode("utf-8-sig")
+    except (OSError, UnicodeDecodeError):
+        return None
+    for line in text.splitlines():
+        name = line.strip()
+        if not name or name.startswith("#"):
+            continue
+        if not name.lower().endswith(".pbn"):
+            name += ".pbn"
+        return name
+    return None
+
+
 class Handler(BaseHTTPRequestHandler):
     server_version = "bridge-pbn-render/1.0"
 
@@ -96,7 +133,15 @@ class Handler(BaseHTTPRequestHandler):
             return
 
         if path == "/api/pbn-list":
-            self._send_json(200, {"files": pbn_files()})
+            files = pbn_files()
+            requested = default_pbn_requested()
+            names = {f["name"] for f in files}
+            default = requested if requested in names else None
+            self._send_json(200, {
+                "files": files,
+                "default": default,
+                "default_requested": requested,
+            })
             return
 
         if path.startswith("/pbn/"):

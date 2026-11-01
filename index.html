@@ -3239,10 +3239,13 @@
 
     /* Render PBN selector: list files from /api/pbn-list, load via loadText.
        Auto-load behaviour: this page starts with no file loaded (the
-       "No preload" note below), so if the list is non-empty the first
-       file is auto-loaded once at startup; otherwise the page stays on
-       the upload prompt. Selecting a file, or uploading/pasting, always
-       replaces the current data via loadText, never appends to it.
+       "No preload" note below), so if the list is non-empty one file
+       is auto-loaded once at startup: the file named by pbn/default.txt
+       (server field "default") if present and found, otherwise the
+       first file; a marker naming a missing file warns in the status
+       and falls back to the first file. Selecting a file, or
+       uploading/pasting, always replaces the current data via
+       loadText, never appends to it.
        If /api/pbn-list is unreachable (e.g. this HTML opened directly
        as a local file, not through the Render service), the selector
        just reports that and upload/paste keep working. */
@@ -3267,8 +3270,21 @@
           o.value = f.url; o.textContent = f.name + "（" + renderPbnFmtSize(f.size) + "）"; o.dataset.name = f.name;
           sel.appendChild(o);
         });
-        renderPbnStatus("Render 上共 " + files.length + " 个 PBN 文件，已自动载入第一个：" + files[0].name + "。换一个文件请在下拉里选择后点“载入所选文件”。");
-        loadRenderPbnFile(files[0]);
+        var autoFile = files[0], autoIdx = 0, usedDefault = false;
+        if(data && data.default){
+          for(var di = 0; di < files.length; di++){
+            if(files[di].name === data.default){ autoFile = files[di]; autoIdx = di; usedDefault = true; break; }
+          }
+        }
+        sel.selectedIndex = autoIdx;
+        if(usedDefault){
+          renderPbnStatus("Render 上共 " + files.length + " 个 PBN 文件，已按 default.txt 自动载入默认文件：" + autoFile.name + "。换一个文件请在下拉里选择后点“载入所选文件”。");
+        }else if(data && data.default_requested){
+          renderPbnStatus("Render 上共 " + files.length + " 个 PBN 文件，但 default.txt 指定的默认文件 " + data.default_requested + " 未找到，已自动载入第一个：" + files[0].name + "。换一个文件请在下拉里选择后点“载入所选文件”。");
+        }else{
+          renderPbnStatus("Render 上共 " + files.length + " 个 PBN 文件，已自动载入第一个：" + files[0].name + "。换一个文件请在下拉里选择后点“载入所选文件”。");
+        }
+        loadRenderPbnFile(autoFile);
       }).catch(function(e){ renderPbnStatus("无法读取 Render 上的牌局文件列表（本机直接打开 HTML 文件时会出现这种情况）：" + e.message + "。请改用上传或粘贴。"); });
     }
     if($("renderPbnLoad")) $("renderPbnLoad").addEventListener("click", function(){
