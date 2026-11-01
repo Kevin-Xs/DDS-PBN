@@ -504,6 +504,38 @@
         .cmp-link{font-size:13.5px}
       }
 
+      /* ---------- same-board comparison (tab 3) ---------- */
+      .cmp-num-strip{margin-top:0;margin-bottom:12px}
+      .cmp-summary{font-size:13.5px;color:var(--ink-2);margin:0 0 10px;line-height:1.6}
+      .cmp-summary b{color:var(--ink)}
+      table.compare-table{width:100%;border-collapse:collapse;font-size:14.5px}
+      table.compare-table th{
+        text-align:left;font-size:12.5px;color:var(--ink-2);font-weight:700;
+        padding:9px 12px;background:var(--surface-2);border-bottom:1px solid var(--line);white-space:nowrap;
+      }
+      table.compare-table td{padding:9px 12px;border-bottom:1px solid var(--line);vertical-align:middle;overflow-wrap:anywhere}
+      table.compare-table tbody tr{cursor:pointer}
+      table.compare-table tbody tr:hover{background:var(--accent-soft)}
+      table.compare-table tbody tr.active{background:var(--accent-soft);box-shadow:inset 4px 0 0 var(--accent)}
+      table.compare-table tbody tr:last-child td{border-bottom:none}
+      table.compare-table td.cmpc-score{font-weight:800;font-variant-numeric:tabular-nums;white-space:nowrap;font-size:15.5px}
+      table.compare-table td.cmpc-score.pos{color:var(--accent)}
+      table.compare-table td.cmpc-score.neg{color:var(--red)}
+      table.compare-table td.cmpc-contract{font-weight:700;white-space:nowrap}
+      table.compare-table td.cmpc-lead{white-space:nowrap;font-size:16px;font-weight:700}
+      .cmp-pair{font-weight:600;line-height:1.4}
+      .cmp-matchline{display:block;font-size:12px;color:var(--ink-2);margin-top:2px;line-height:1.45}
+      .cmp-roomline{display:none}
+      @media (max-width:640px){
+        table.compare-table{font-size:13px}
+        table.compare-table th,table.compare-table td{padding:8px 7px}
+        table.compare-table th:nth-child(2),table.compare-table td:nth-child(2){display:none}
+        table.compare-table td.cmpc-score{font-size:14px}
+        /* EW column is hidden at phone width, so the room label would
+           be lost with it; show it under the NS pair instead. */
+        .cmp-roomline{display:block}
+      }
+
       /* ---------- empty board face for a match without data ---------- */
       .match-felt{
         background:linear-gradient(160deg,var(--felt),var(--felt-dark));
@@ -533,12 +565,14 @@
   <body>
     <main class="wrap">
 
-      <!-- ============ tabs (two only: 1 = matches + PBN loader, 2 = this match's boards + replay) ============ -->
+      <!-- ============ tabs (1 = matches + PBN loader, 2 = this match's boards + replay, 3 = same-board comparison) ============ -->
       <nav class="view-nav" aria-label="标签页">
         <div class="vn-steps" role="tablist">
-          <button class="vn-step" id="tabMatches" type="button" role="tab">比赛列表 · 上传 PBN</button>
+          <button class="vn-step" id="tabMatches" type="button" role="tab">比赛汇总 选PBN</button>
           <span class="vn-sep">›</span>
-          <button class="vn-step" id="tabBoardGame" type="button" role="tab">本场牌面 · 打牌过程</button>
+          <button class="vn-step" id="tabBoardGame" type="button" role="tab">单场比赛 打牌过程</button>
+          <span class="vn-sep">›</span>
+          <button class="vn-step" id="tabCompare" type="button" role="tab">同牌比较</button>
         </div>
         <span class="vn-title" id="navTitle">队式赛 · 先选一场比赛</span>
       </nav>
@@ -580,6 +614,39 @@
         </div>
         <div class="match-head-card" id="matchDetailHead"></div>
         <div id="matchBoardsArea"></div>
+      </section>
+
+      <!-- ============ tab 3: same-board comparison across every table in the file ============ -->
+      <section id="viewCompare" class="hidden" aria-label="同牌比较">
+        <div class="view-bar">
+          <button class="btn" id="btnBackFromCompare" type="button">← 返回比赛列表</button>
+          <span class="vb-title">同牌比较</span>
+          <span class="vb-sub">同一副牌在所有桌子上的成绩，按 NS 原始分从高到低排列；点一行看那一桌的打牌过程</span>
+        </div>
+        <div class="empty-state" id="cmpEmpty">
+          <div class="es-title">尚未指定 PBN 文件</div>
+          <p class="es-text">先到第一个标签页上传 PBN 文件，这里会按牌号列出这副牌在文件里所有桌子上的成绩。</p>
+          <div class="es-actions"><button class="btn primary" id="btnCmpGoUpload" type="button">去上传 PBN 文件</button></div>
+        </div>
+        <div id="cmpContent" class="hidden">
+          <div class="board-strip cmp-num-strip" id="cmpBoardStrip" aria-label="同牌比较牌号选择"></div>
+          <p class="cmp-summary" id="cmpSummary"></p>
+          <div class="board-table-wrap">
+            <table class="compare-table" id="cmpTable" aria-label="这副牌在所有桌子上的成绩">
+              <thead>
+                <tr>
+                  <th scope="col">NS</th>
+                  <th scope="col">EW</th>
+                  <th scope="col">Contract</th>
+                  <th scope="col">Lead</th>
+                  <th scope="col">Score（NS）</th>
+                </tr>
+              </thead>
+              <tbody id="cmpRows"></tbody>
+            </table>
+          </div>
+          <p class="cmp-summary" style="margin-top:10px">分数直接取文件里的 Score 标签：写 NS x 记 +x，写 EW x 记 −x（即 NS 一方的原始分）；不按定约重新算分，也不用 ScoreIMP。点任意一行，下方牌桌就显示那一桌的叫牌与出牌过程。</p>
+        </div>
       </section>
 
       <!-- ============ loader (tab 1 only, directly below the match list) ============ -->
@@ -1734,6 +1801,11 @@
     /* ================= state & rendering ================= */
     var boards = [];            // boards of the currently selected match only
     var fileMatches = [];       // matches parsed from the loaded PBN file
+    var allParsed = [];         // every record of the loaded file (tab 3 compares across all of them)
+    var cmpBoard = null;        // board number selected on tab 3
+    var cmpRowsData = [];       // tab 3 rows for cmpBoard, sorted by NS raw score desc
+    var compareActive = false;  // true while the viewer below tab 3 shows a compare row's replay
+    var stashMatch = null;      // tab 2 boards/curIdx/step saved while a compare replay borrows `boards`
     var loadedSourceName = "";
     var curIdx = -1, step = 0;
 
@@ -1760,6 +1832,11 @@
       // fixed list. Tab 2 starts empty until a match is clicked, so no
       // other match's boards can leak into it.
       fileMatches = buildMatches(parsed);
+      // Tab 3 (同牌比较) works on EVERY record of this file, across all
+      // matches — keep the full parsed list for it.
+      allParsed = parsed;
+      cmpBoard = null; cmpRowsData = [];
+      compareActive = false; stashMatch = null;
       loadedSourceName = sourceName;
       selectedMatch = -1; loadedMatchIdx = -1;
       boards = []; curIdx = -1; step = 0;
@@ -1922,6 +1999,201 @@
       });
     }
 
+    /* ============ tab 3: same-board comparison across all tables ============
+       Every record of the loaded file that shares the selected board
+       number is one row, whichever match it belongs to. The score is
+       the record's NS raw points taken straight from its Score tag —
+       scoreNSPoints() already maps "NS x" -> +x and "EW x" -> -x —
+       never recomputed from the contract and never the ScoreIMP tag.
+       Rows sort by that NS score, high to low; a record with no
+       readable Score sinks to the bottom and shows —. Rows that share
+       the same score but sit at different tables stay separate rows:
+       each pair carries its own team name underneath it (HomeTeam /
+       VisitTeam split by seat and room — see cmpSideTeams), with the
+       room label kept after the EW team name, and clicking a row
+       replays THAT table's own record (its hands, auction, play and
+       contract) in the table below, borrowed from the tab-2 viewer. */
+    function cmpBoardLabels(){
+      var seen = {}, list = [];
+      allParsed.forEach(function(b, i){
+        var bn = boardKeyOf(b, i);
+        if(!seen[bn]){ seen[bn] = true; list.push(bn); }
+      });
+      list.sort(function(a, b){
+        var na = parseFloat(a), nb = parseFloat(b);
+        if(!isNaN(na) && !isNaN(nb) && na !== nb) return na - nb;
+        return a < b ? -1 : (a > b ? 1 : 0);
+      });
+      return list;
+    }
+    function cmpPairNames(b, s1, s2){
+      var a = cleanPlayerName(b.players && b.players[s1]);
+      var c = cleanPlayerName(b.players && b.players[s2]);
+      if(!a && !c) return "—";
+      return (a || "—") + " & " + (c || "—");
+    }
+    // Room label for one record (e.g. "Open" / "Closed"), taken from
+    // the Room tag, falling back to the Table tag. Shown as-is.
+    function cmpRoomText(b){
+      return String((b && (b.room || b.table)) || "").trim();
+    }
+    function cmpIsClosedRoom(b){
+      return cmpRoomText(b).toLowerCase().indexOf("closed") >= 0;
+    }
+    // Team name for each side of one record, split per side: the PBN
+    // has no per-seat team tag, only HomeTeam / VisitTeam, so the side
+    // is worked out from the room — in the Open room NS is the home
+    // team and EW the visiting team; in the Closed room the seats are
+    // swapped (NS is the visiting team, EW the home team). With no
+    // room tag the Open arrangement is assumed. A side whose team tag
+    // is absent stays empty: no team name is invented for it.
+    function cmpSideTeams(b){
+      var home = String((b && b.homeTeam) || "").trim();
+      var away = String((b && b.visitingTeam) || "").trim();
+      if(!home && !away) return {ns: "", ew: ""};
+      if(cmpIsClosedRoom(b)) return {ns: away, ew: home};
+      return {ns: home, ew: away};
+    }
+    function cmpResultSuffix(b){
+      var c = b.contract;
+      if(!c || c.pass || !c.level) return "";
+      var tricks = null;
+      var r = (b.resultRaw || "").trim();
+      if(/^\d+$/.test(r)) tricks = parseInt(r, 10);
+      else {
+        computePlay(b);
+        if(b.declarer && b.playCards.length >= 52){
+          var cnt = tricksWonAt(b, b.playCards.length);
+          tricks = sideOf(b.declarer) === "NS" ? cnt.NS : cnt.EW;
+        }
+      }
+      if(tricks === null) return "";
+      var d = tricks - (c.level + 6);
+      return d === 0 ? "=" : (d > 0 ? "+" + d : String(d));
+    }
+    function cmpLeadHTML(b){
+      computePlay(b);
+      var card = b.playCards && b.playCards[0];
+      if(!card) return '<span class="cmp-dash">—</span>';
+      return '<span class="suit-' + card.suit.toLowerCase() + '">' + SUIT_SYM[card.suit] + "</span>" + rankDisp(card.rank);
+    }
+    function cmpScoreText(ns){
+      if(ns === null || ns === undefined) return "—";
+      var v = Math.round(ns);
+      return v > 0 ? "+" + v : String(v);
+    }
+    function renderCompare(){
+      var has = allParsed.length > 0;
+      $("cmpEmpty").classList.toggle("hidden", has);
+      $("cmpContent").classList.toggle("hidden", !has);
+      if(!has) return;
+      var labels = cmpBoardLabels();
+      if(!cmpBoard || labels.indexOf(cmpBoard) < 0) cmpBoard = labels[0];
+      // board-number strip: one button per distinct board number
+      var strip = '<span class="bs-label">牌号</span>';
+      labels.forEach(function(bn){
+        strip += '<button class="bs-btn' + (bn === cmpBoard ? " on" : "") + '" type="button" data-cmp-bn="' + esc(bn) + '">' + esc(bn) + "</button>";
+      });
+      $("cmpBoardStrip").innerHTML = strip;
+      $("cmpBoardStrip").querySelectorAll("[data-cmp-bn]").forEach(function(btn){
+        btn.addEventListener("click", function(){
+          var bn = btn.getAttribute("data-cmp-bn");
+          if(bn === cmpBoard && compareActive) return;
+          // Switching boards drops the previous board's replay; the
+          // user picks one of the new board's rows to open the next one.
+          exitCompareReplay();
+          cmpBoard = bn;
+          renderCompare();
+          applyView();
+        });
+      });
+      // rows for the selected board number, NS raw score high -> low
+      var rows = [];
+      allParsed.forEach(function(b, i){
+        if(boardKeyOf(b, i) !== cmpBoard) return;
+        rows.push({b: b, fileOrder: i, nsScore: scoreNSPoints(b)});
+      });
+      rows.sort(function(a, b){
+        if(a.nsScore === null && b.nsScore === null) return a.fileOrder - b.fileOrder;
+        if(a.nsScore === null) return 1;
+        if(b.nsScore === null) return -1;
+        return (b.nsScore - a.nsScore) || (a.fileOrder - b.fileOrder);
+      });
+      cmpRowsData = rows;
+      $("cmpSummary").innerHTML = "第 <b>" + esc(cmpBoard) + "</b> 副 · 共 <b>" + rows.length + "</b> 桌打过这副牌 · 已按 NS 原始分从高到低排列"
+        + (compareActive ? " · 点另一行可换看那一桌的打牌过程" : " · 点任意一行看那一桌的打牌过程");
+      var html = "";
+      rows.forEach(function(r, pos){
+        var b = r.b;
+        var isActive = compareActive && curIdx === pos;
+        var teams = cmpSideTeams(b);
+        var roomTxt = cmpRoomText(b);
+        // NS pair: only the NS side's team name underneath. EW pair:
+        // only the EW side's team name, with the room label kept after
+        // it ("钢铁侠 · Open"); a record with no team tags gets no team
+        // line at all — the room label alone still shows under EW.
+        var nsSub = teams.ns ? '<span class="cmp-matchline">' + esc(teams.ns) + "</span>" : "";
+        var ewLine = teams.ew && roomTxt ? teams.ew + " · " + roomTxt : (teams.ew || roomTxt);
+        var ewSub = ewLine ? '<span class="cmp-matchline">' + esc(ewLine) + "</span>" : "";
+        // Phone width hides the EW column, so repeat the room label
+        // under NS there (CSS shows .cmp-roomline only <=640px).
+        var roomSub = roomTxt ? '<span class="cmp-matchline cmp-roomline">' + esc(roomTxt) + "</span>" : "";
+        var ariaTeams = (teams.ns || teams.ew)
+          ? "：" + (teams.ns || "—") + " 对 " + (teams.ew || "—") + (roomTxt ? " · " + roomTxt : "")
+          : (roomTxt ? " · " + roomTxt : "");
+        html += '<tr data-cmp-pos="' + pos + '" tabindex="0" role="button" class="' + (isActive ? "active" : "") + '" aria-label="看这桌的打牌过程：' + esc(cmpPairNames(b, "N", "S")) + " 对 " + esc(cmpPairNames(b, "E", "W")) + esc(ariaTeams) + '">'
+          + '<td><span class="cmp-pair">' + esc(cmpPairNames(b, "N", "S")) + "</span>" + nsSub + roomSub + "</td>"
+          + '<td><span class="cmp-pair">' + esc(cmpPairNames(b, "E", "W")) + "</span>" + ewSub + "</td>"
+          + '<td class="cmpc-contract">' + (b.contract ? contractHTML(b.contract) + esc(cmpResultSuffix(b)) + (b.declarer ? " " + esc(b.declarer) : "") : '<span class="cmp-dash">—</span>') + "</td>"
+          + '<td class="cmpc-lead">' + cmpLeadHTML(b) + "</td>"
+          + '<td class="cmpc-score ' + (r.nsScore > 0 ? "pos" : r.nsScore < 0 ? "neg" : "") + '">' + cmpScoreText(r.nsScore) + "</td></tr>";
+      });
+      $("cmpRows").innerHTML = html;
+      $("cmpRows").querySelectorAll("tr[data-cmp-pos]").forEach(function(row){
+        var pos = parseInt(row.getAttribute("data-cmp-pos"), 10);
+        row.addEventListener("click", function(){ selectCompareRow(pos); });
+        row.addEventListener("keydown", function(e){ if(e.key === "Enter" || e.key === " "){ e.preventDefault(); selectCompareRow(pos); } });
+      });
+    }
+    function syncCompareActive(){
+      var box = $("cmpRows"); if(!box) return;
+      box.querySelectorAll("tr[data-cmp-pos]").forEach(function(row){
+        var pos = parseInt(row.getAttribute("data-cmp-pos"), 10);
+        row.classList.toggle("active", compareActive && pos === curIdx);
+      });
+    }
+    // Borrow the tab-2 viewer for one compare row: `boards` is swapped
+    // to this board number's records in the table's own (score-sorted)
+    // order, so curIdx == the row position and the felt controls, the
+    // auction / DD / Par corners and the per-card badges all work on
+    // that table's record exactly as on tab 2. Tab 2's own boards are
+    // stashed and restored when the user leaves tab 3.
+    function selectCompareRow(pos){
+      if(appView !== "compare") return;
+      var entry = cmpRowsData[pos]; if(!entry) return;
+      if(!compareActive){
+        stashMatch = {boards: boards, curIdx: curIdx, step: step};
+        candAbort(); candCache = {}; candFailed = {};
+        boards = cmpRowsData.map(function(r){ return r.b; });
+        compareActive = true;
+        curIdx = -1; step = 0;
+      }
+      selectBoard(pos, true);
+      syncCompareActive();
+      applyView();
+      $("viewer").scrollIntoView({behavior:"smooth", block:"start"});
+    }
+    function exitCompareReplay(){
+      if(!compareActive) return;
+      candAbort(); candCache = {}; candFailed = {};
+      if(stashMatch){
+        boards = stashMatch.boards; curIdx = stashMatch.curIdx; step = stashMatch.step;
+      } else {
+        boards = []; curIdx = -1; step = 0;
+      }
+      compareActive = false; stashMatch = null;
+    }
+
     function cur(){ return boards[curIdx]; }
 
     function selectBoard(i, keepTop){
@@ -1931,6 +2203,7 @@
       otherTableNote = false;
       computePlay(cur());
       markActiveRow();
+      if(appView === "compare") syncCompareActive();
       renderViewer();
       applyView();
       if(!keepTop && appView === "boardgame"){
@@ -2558,7 +2831,7 @@
     /* ================= controls wiring (keyboard; on-table felt buttons are wired below) ================= */
     document.addEventListener("keydown", function(e){
       if(curIdx < 0) return;
-      if(appView !== "boardgame") return;
+      if(appView !== "boardgame" && !(appView === "compare" && compareActive)) return;
       var tag = (e.target && e.target.tagName) || "";
       if(tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return;
       if(e.key === "ArrowRight"){ e.preventDefault(); setStep(step+1); }
@@ -2589,7 +2862,7 @@
       loadText(t, "粘贴的 PBN 文本");
     });
 
-    /* ================= team matches: two-tab navigation =================
+    /* ================= team matches: three-tab navigation =================
        Tab 1 "matches": the match list parsed from the currently loaded
        PBN file (teams from each board's HomeTeam / VisitTeam tags —
        the list changes with the file; with no file it only prompts for
@@ -2598,7 +2871,11 @@
        Tab 2 "boardgame": the selected match's boards and the replay
        table merged into one page. `boards` is swapped to hold ONLY the
        selected match's boards, so another match's boards can never
-       appear here. There is no third tab. */
+       appear here.
+       Tab 3 "compare": every record of the loaded file grouped by
+       board number, sorted by NS raw score; clicking a row borrows
+       the same replay table for that table's record (see
+       selectCompareRow), and leaving tab 3 restores tab 2's boards. */
     var appView = "matches";
     var selectedMatch = -1;
     var loadedMatchIdx = -1;
@@ -2636,22 +2913,40 @@
       }
     }
     function applyView(){
-      var isM = appView === "matches", isBG = appView === "boardgame";
+      var isM = appView === "matches", isBG = appView === "boardgame", isCmp = appView === "compare";
       var inScope = isBG && boardsInScope();
+      var cmpScope = isCmp && compareActive && curIdx >= 0 && boards.length > 0;
       $("viewMatches").classList.toggle("hidden", !isM);
       $("viewMatchDetail").classList.toggle("hidden", !isBG);
+      $("viewCompare").classList.toggle("hidden", !isCmp);
       $("loaderSection").classList.toggle("hidden", !isM);
       $("listSection").classList.toggle("hidden", !inScope);
-      $("viewer").classList.toggle("hidden", !inScope);
+      $("viewer").classList.toggle("hidden", !(inScope || cmpScope));
+      // The viewer's own board-number strip belongs to tab 2 (one
+      // button per board of the selected match); on tab 3 the board
+      // numbers live in the comparison strip above the results table.
+      $("boardStrip").classList.toggle("hidden", isCmp);
       $("tabMatches").classList.toggle("on", isM);
       $("tabBoardGame").classList.toggle("on", isBG);
+      $("tabCompare").classList.toggle("on", isCmp);
       var t = "队式赛 · 比赛列表与 PBN 载入";
       if(isBG && selectedMatch >= 0 && fileMatches[selectedMatch]){ var m = fileMatches[selectedMatch]; t = matchDisplayHome(m) + " vs " + matchDisplayAway(m) + " · 本场牌面与打牌过程"; }
       else if(isBG) t = "尚未选择比赛";
+      else if(isCmp) t = allParsed.length ? "同牌比较 · 共 " + cmpBoardLabels().length + " 副牌" : "同牌比较 · 尚未载入文件";
       $("navTitle").textContent = t;
       if(isBG) refreshBoardGame();
+      if(isCmp) renderCompare();
     }
-    function goView(v){ appView = v; applyView(); window.scrollTo({top:0, behavior:"smooth"}); }
+    function goView(v){
+      // Leaving tab 3 hands `boards` back to tab 2 first, so the
+      // replay table there shows the selected match's board again,
+      // not a compare row's record.
+      if(v !== "compare" && compareActive){
+        exitCompareReplay();
+        if(v === "boardgame" && curIdx >= 0) renderViewer();
+      }
+      appView = v; applyView(); window.scrollTo({top:0, behavior:"smooth"});
+    }
     function showMatchesView(){ goView("matches"); }
     function openMatch(i){
       var m = fileMatches[i]; if(!m) return;
@@ -2660,6 +2955,7 @@
       // Swap `boards` to this match's boards ONLY — the board list, the
       // board-number strip and the replay table all read from it, so no
       // other match's boards can be shown on tab 2.
+      compareActive = false; stashMatch = null;
       candAbort(); candCache = {}; candFailed = {};
       boards = m.boards.slice();
       curIdx = -1; step = 0; otherTableNote = false;
@@ -2716,7 +3012,10 @@
 
     $("tabMatches").addEventListener("click", showMatchesView);
     $("tabBoardGame").addEventListener("click", function(){ goView("boardgame"); });
+    $("tabCompare").addEventListener("click", function(){ goView("compare"); });
     $("btnBackToMatches").addEventListener("click", showMatchesView);
+    $("btnBackFromCompare").addEventListener("click", showMatchesView);
+    if($("btnCmpGoUpload")) $("btnCmpGoUpload").addEventListener("click", function(){ goView("matches"); $("loaderSection").scrollIntoView({behavior:"smooth", block:"start"}); });
     $("btnStart2").addEventListener("click", function(){ setStep(0); });
     $("btnPrev2").addEventListener("click", function(){ setStep(step-1); });
     $("btnNext2").addEventListener("click", function(){ setStep(step+1); });

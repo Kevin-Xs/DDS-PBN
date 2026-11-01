@@ -2,8 +2,9 @@
 
 Open the replay page from a public URL, pick a PBN file from a
 dropdown in the first tab, and replay it — no upload step needed.
-Everything else is unchanged from the replay page: two-tab
-team-match view, Par contract line, double-dummy table in
+Everything else is unchanged from the replay page: three-tab
+view (match summary, single-match replay, same-board comparison),
+Par contract line, double-dummy table in
 N / S / E / W order, per-card +n / = / −n badges, and the
 first-tab DDS service setting.
 
@@ -23,12 +24,27 @@ If you have **not** created a service yet, ignore this section
 and follow **“Deploy to Render (free)”** below, which is the
 full first-time setup.
 
-**What is new in this version:** the first-tab title now shows
-the loaded PBN filename without the `.pbn` suffix (for example
-`2610273252192026DreamlandCup_full` instead of “队名列表”),
-falling back to “队名列表” when nothing is loaded. Everything
-else — the PBN selector, the two-tab view, Par, DDS settings,
-and badges — is unchanged.
+**本次更新 (what is new in this version, vs the previous Render package):**
+- Third tab “同牌比较” (same-board comparison): a board-number row
+  (distinct board numbers, ascending, default first board), a table of
+  that board's results at all tables sorted by NS raw Score from the
+  Score tag (NS x = +x, EW x = −x, ScoreIMP ignored, no IMP-table
+  conversion, no datum/average), and clicking a row opens that table's
+  own replay below the table.
+- Team names split per side in that table: the NS pair shows only the
+  NS side's team underneath it, the EW pair shows only the EW side's
+  team (Room indicator kept after the EW team); Open NS = Home team /
+  EW = Visit team, Closed NS = Visit team / EW = Home team, from
+  HomeTeam / VisitTeam and Room. Records with no team tags show no
+  team line.
+- Tab renames: tab 1 “比赛汇总 选PBN”, tab 2 “单场比赛 打牌过程”,
+  tab 3 “同牌比较” (unchanged).
+- Still included from v1: first-tab title shows the loaded PBN filename
+  without the `.pbn` suffix (for example
+  `2610273252192026DreamlandCup_full` instead of “队名列表”),
+  falling back to “队名列表” when nothing is loaded. Everything
+  else — the PBN selector, Par, DDS settings,
+  and badges — is unchanged.
 
 ## What is in this folder
 
