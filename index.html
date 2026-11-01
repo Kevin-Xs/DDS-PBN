@@ -370,7 +370,7 @@
       /* ---------- matches (team list) ---------- */
       .matches-head{margin-bottom:14px}
       .matches-title{font-size:24px;margin:0 0 4px;letter-spacing:.01em;overflow-wrap:anywhere}
-      .matches-title #matchesCount{font-size:16px;color:var(--ink-2);font-weight:600}
+      .matches-title #matchesCount,.matches-title #cmpTitleCount{font-size:16px;color:var(--ink-2);font-weight:600}
       .matches-sub{margin:0 0 12px;color:var(--ink-2);font-size:14px}
       table.match-table{width:100%;border-collapse:collapse;font-size:15px}
       table.match-table th{
@@ -388,9 +388,10 @@
       .team-name{font-weight:600}
       .row-arrow{color:var(--ink-2);font-size:13px;white-space:nowrap}
       @media (max-width:640px){
-        table.match-table td,table.match-table th{padding:10px 9px}
-        table.match-table{font-size:14px}
-        table.match-table th:last-child,table.match-table td:last-child,
+        table.match-table td,table.match-table th{padding:10px 7px}
+        table.match-table{font-size:13.5px}
+        table.match-table th{white-space:normal;line-height:1.35}
+        table.match-table th.imp,table.match-table th.vp{white-space:normal}
         table.match-table th:nth-child(3),table.match-table td:nth-child(3){display:none}
         .matches-title{font-size:21px}
       }
@@ -521,6 +522,9 @@
       table.compare-table td.cmpc-score{font-weight:800;font-variant-numeric:tabular-nums;white-space:nowrap;font-size:15.5px}
       table.compare-table td.cmpc-score.pos{color:var(--accent)}
       table.compare-table td.cmpc-score.neg{color:var(--red)}
+      table.compare-table td.cmpc-ximp{font-weight:700;font-variant-numeric:tabular-nums;white-space:nowrap}
+      table.compare-table td.cmpc-ximp.pos{color:var(--accent)}
+      table.compare-table td.cmpc-ximp.neg{color:var(--red)}
       table.compare-table td.cmpc-contract{font-weight:700;white-space:nowrap}
       table.compare-table td.cmpc-lead{white-space:nowrap;font-size:16px;font-weight:700}
       .cmp-pair{font-weight:600;line-height:1.4}
@@ -597,7 +601,6 @@
                 <th scope="col">副数</th>
                 <th scope="col" class="imp">IMP（主队:客队）</th>
                 <th scope="col" class="vp">VP（主队:客队）</th>
-                <th scope="col"><span class="muted"> </span></th>
               </tr>
             </thead>
             <tbody id="matchRows"></tbody>
@@ -629,6 +632,9 @@
           <div class="es-actions"><button class="btn primary" id="btnCmpGoUpload" type="button">去上传 PBN 文件</button></div>
         </div>
         <div id="cmpContent" class="hidden">
+          <div class="matches-head" style="margin-bottom:10px">
+            <h2 class="matches-title"><span id="cmpTitleName">队名列表</span> <span id="cmpTitleCount"></span></h2>
+          </div>
           <div class="board-strip cmp-num-strip" id="cmpBoardStrip" aria-label="同牌比较牌号选择"></div>
           <p class="cmp-summary" id="cmpSummary"></p>
           <div class="board-table-wrap">
@@ -640,12 +646,13 @@
                   <th scope="col">Contract</th>
                   <th scope="col">Lead</th>
                   <th scope="col">Score（NS）</th>
+                  <th scope="col">X-IMP</th>
                 </tr>
               </thead>
               <tbody id="cmpRows"></tbody>
             </table>
           </div>
-          <p class="cmp-summary" style="margin-top:10px">分数直接取文件里的 Score 标签：写 NS x 记 +x，写 EW x 记 −x（即 NS 一方的原始分）；不按定约重新算分，也不用 ScoreIMP。点任意一行，下方牌桌就显示那一桌的叫牌与出牌过程。</p>
+          <p class="cmp-summary" style="margin-top:10px">分数直接取文件里的 Score 标签：写 NS x 记 +x，写 EW x 记 −x（即 NS 一方的原始分）；不按定约重新算分，也不用 ScoreIMP。X-IMP：本桌 NS 分与每一其他桌 NS 分之差按标准 IMP 表换算后求和，再除以（有得分的桌数 − 1），保留两位小数；只有一桌、或本行没有得分时显示 —。点任意一行，下方牌桌就显示那一桌的叫牌与出牌过程。</p>
         </div>
       </section>
 
@@ -2012,7 +2019,12 @@
        VisitTeam split by seat and room — see cmpSideTeams), with the
        room label kept after the EW team name, and clicking a row
        replays THAT table's own record (its hands, auction, play and
-       contract) in the table below, borrowed from the tab-2 viewer. */
+       contract) in the table below, borrowed from the tab-2 viewer.
+       The X-IMP column after Score is the cross-IMP average defined
+       at cmpXImpText: each pairwise score difference converted with
+       the standard IMP table, summed, divided by (scored tables - 1),
+       shown signed with two decimals (— for a lone table or a row
+       without a score). */
     function cmpBoardLabels(){
       var seen = {}, list = [];
       allParsed.forEach(function(b, i){
@@ -2082,11 +2094,27 @@
       var v = Math.round(ns);
       return v > 0 ? "+" + v : String(v);
     }
+    // X-IMP for one row of the same-board comparison: for this table's
+    // NS raw score Si and every other table's Sj on the same board,
+    // convert each difference Si - Sj with the standard IMP table
+    // (impFromPointDiff), sum those IMPs, and divide by (N - 1), where
+    // N is the number of tables on this board that have a readable
+    // score. Rows without a score take no part (neither as Si nor as
+    // Sj) and get null; with only one scored table the divisor would
+    // be 0, so the value is also null — both cases display —.
+    function cmpXImpText(v){
+      if(v === null || v === undefined || !isFinite(v)) return "—";
+      var r = Math.round(v * 100) / 100;
+      if(r === 0) return "+0.00";
+      return (r > 0 ? "+" : "") + r.toFixed(2);
+    }
     function renderCompare(){
       var has = allParsed.length > 0;
       $("cmpEmpty").classList.toggle("hidden", has);
       $("cmpContent").classList.toggle("hidden", !has);
       if(!has) return;
+      if($("cmpTitleName")) $("cmpTitleName").textContent = pbnDisplayName(loadedSourceName);
+      if($("cmpTitleCount")) $("cmpTitleCount").textContent = fileMatches.length ? "（共 " + fileMatches.length + " 场比赛）" : "";
       var labels = cmpBoardLabels();
       if(!cmpBoard || labels.indexOf(cmpBoard) < 0) cmpBoard = labels[0];
       // board-number strip: one button per distinct board number
@@ -2119,6 +2147,20 @@
         if(b.nsScore === null) return -1;
         return (b.nsScore - a.nsScore) || (a.fileOrder - b.fileOrder);
       });
+      // X-IMP per row (see cmpXImpText): cross-IMP against every other
+      // scored table on this board, averaged over (N - 1). Sorting
+      // stays by NS raw score high -> low; the IMP table is monotonic,
+      // so that is also X-IMP high -> low order.
+      var scoredRows = rows.filter(function(r){ return r.nsScore !== null; });
+      var scoredCount = scoredRows.length;
+      rows.forEach(function(r){
+        if(r.nsScore === null || scoredCount <= 1){ r.xImp = null; return; }
+        var impSum = 0;
+        scoredRows.forEach(function(o){
+          if(o !== r) impSum += impFromPointDiff(r.nsScore - o.nsScore);
+        });
+        r.xImp = impSum / (scoredCount - 1);
+      });
       cmpRowsData = rows;
       $("cmpSummary").innerHTML = "第 <b>" + esc(cmpBoard) + "</b> 副 · 共 <b>" + rows.length + "</b> 桌打过这副牌 · 已按 NS 原始分从高到低排列"
         + (compareActive ? " · 点另一行可换看那一桌的打牌过程" : " · 点任意一行看那一桌的打牌过程");
@@ -2146,7 +2188,8 @@
           + '<td><span class="cmp-pair">' + esc(cmpPairNames(b, "E", "W")) + "</span>" + ewSub + "</td>"
           + '<td class="cmpc-contract">' + (b.contract ? contractHTML(b.contract) + esc(cmpResultSuffix(b)) + (b.declarer ? " " + esc(b.declarer) : "") : '<span class="cmp-dash">—</span>') + "</td>"
           + '<td class="cmpc-lead">' + cmpLeadHTML(b) + "</td>"
-          + '<td class="cmpc-score ' + (r.nsScore > 0 ? "pos" : r.nsScore < 0 ? "neg" : "") + '">' + cmpScoreText(r.nsScore) + "</td></tr>";
+          + '<td class="cmpc-score ' + (r.nsScore > 0 ? "pos" : r.nsScore < 0 ? "neg" : "") + '">' + cmpScoreText(r.nsScore) + "</td>"
+          + '<td class="cmpc-ximp ' + (r.xImp > 0 ? "pos" : r.xImp < 0 ? "neg" : "") + '">' + cmpXImpText(r.xImp) + "</td></tr>";
       });
       $("cmpRows").innerHTML = html;
       $("cmpRows").querySelectorAll("tr[data-cmp-pos]").forEach(function(row){
@@ -2893,7 +2936,7 @@
         $("matchDetailHead").innerHTML = '<div class="mh-vs">' + esc(matchDisplayHome(m)) + '<span class="vs">vs</span>' + esc(matchDisplayAway(m)) + "</div>"
           + '<div class="mh-meta"><span>IMP（主队:客队）：<b>' + esc(m.impText) + '</b></span><span>VP（主队:客队）：<b>' + esc(m.vpText) + "</b></span>"
           + '<span>本场共 <b>' + m.boardNumbers + '</b> 副</span>'
-          + (m.event ? '<span>赛事：<b>' + esc(m.event) + "</b></span>" : "")
+          + (loadedSourceName ? '<span>赛事：<b>' + esc(pbnDisplayName(loadedSourceName)) + "</b></span>" : "")
           + (loadedSourceName ? '<span>来自文件：<b>' + esc(loadedSourceName) + "</b></span>" : "")
           + (!m.named ? '<span>文件未标注队伍标签，以下为该文件的全部牌局</span>' : "")
           + "</div>";
@@ -2988,8 +3031,7 @@
           + '<td><span class="team-name">' + esc(matchDisplayAway(m)) + "</span></td>"
           + "<td>" + m.boardNumbers + "</td>"
           + '<td class="imp ' + (m.imp > 0 ? "win" : m.imp < 0 ? "lose" : "") + '">' + esc(m.impText) + "</td>"
-          + '<td class="vp">' + esc(m.vpText) + "</td>"
-          + '<td><span class="row-arrow">看牌面 ›</span></td></tr>';
+          + '<td class="vp">' + esc(m.vpText) + "</td></tr>";
       });
       $("matchRows").innerHTML = html;
       $("matchRows").querySelectorAll("tr").forEach(function(row){
