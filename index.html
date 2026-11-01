@@ -370,7 +370,7 @@
       /* ---------- matches (team list) ---------- */
       .matches-head{margin-bottom:14px}
       .matches-title{font-size:24px;margin:0 0 4px;letter-spacing:.01em;overflow-wrap:anywhere}
-      .matches-title #matchesCount,.matches-title #cmpTitleCount{font-size:16px;color:var(--ink-2);font-weight:600}
+      .matches-title #matchesCount,.matches-title #cmpTitleCount,.matches-title #rankTitleCount{font-size:16px;color:var(--ink-2);font-weight:600}
       .matches-sub{margin:0 0 12px;color:var(--ink-2);font-size:14px}
       table.match-table{width:100%;border-collapse:collapse;font-size:15px}
       table.match-table th{
@@ -540,6 +540,32 @@
         .cmp-roomline{display:block}
       }
 
+      /* ---------- X-IMP ranking (tab 4) ---------- */
+      table.rank-table{width:100%;border-collapse:collapse;font-size:14.5px}
+      table.rank-table th{
+        text-align:left;font-size:12.5px;color:var(--ink-2);font-weight:700;
+        padding:9px 12px;background:var(--surface-2);border-bottom:1px solid var(--line);white-space:nowrap;
+      }
+      table.rank-table td{padding:9px 12px;border-bottom:1px solid var(--line);vertical-align:middle;overflow-wrap:anywhere}
+      table.rank-table tbody tr:last-child td{border-bottom:none}
+      table.rank-table td.rk-rank,table.rank-table th.rk-rank{text-align:center;width:56px}
+      table.rank-table td.rk-rank{font-weight:800;font-size:16px;font-variant-numeric:tabular-nums}
+      table.rank-table td.rk-boards,table.rank-table th.rk-boards{text-align:center}
+      table.rank-table td.rk-boards{font-variant-numeric:tabular-nums}
+      table.rank-table td.rk-num{font-weight:700;font-variant-numeric:tabular-nums;white-space:nowrap}
+      table.rank-table td.rk-num.pos{color:var(--accent)}
+      table.rank-table td.rk-num.neg{color:var(--red)}
+      table.rank-table td.rk-avg{font-size:15.5px;font-weight:800}
+      .rk-pair{font-weight:600;line-height:1.4}
+      .rk-team{color:var(--ink-2);font-size:13.5px}
+      @media (max-width:640px){
+        table.rank-table{font-size:13px}
+        table.rank-table th,table.rank-table td{padding:8px 7px}
+        table.rank-table th:nth-child(3),table.rank-table td:nth-child(3){display:none}
+        table.rank-table td.rk-rank{font-size:14px}
+        table.rank-table td.rk-avg{font-size:14px}
+      }
+
       /* ---------- empty board face for a match without data ---------- */
       .match-felt{
         background:linear-gradient(160deg,var(--felt),var(--felt-dark));
@@ -569,7 +595,7 @@
   <body>
     <main class="wrap">
 
-      <!-- ============ tabs (1 = matches + PBN loader, 2 = this match's boards + replay, 3 = same-board comparison) ============ -->
+      <!-- ============ tabs (1 = matches + PBN loader, 2 = this match's boards + replay, 3 = same-board comparison, 4 = X-IMP ranking) ============ -->
       <nav class="view-nav" aria-label="标签页">
         <div class="vn-steps" role="tablist">
           <button class="vn-step" id="tabMatches" type="button" role="tab">比赛汇总 选PBN</button>
@@ -577,6 +603,8 @@
           <button class="vn-step" id="tabBoardGame" type="button" role="tab">单场比赛 打牌过程</button>
           <span class="vn-sep">›</span>
           <button class="vn-step" id="tabCompare" type="button" role="tab">同牌比较</button>
+          <span class="vn-sep">›</span>
+          <button class="vn-step" id="tabRank" type="button" role="tab">X-IMP排名</button>
         </div>
         <span class="vn-title" id="navTitle">队式赛 · 先选一场比赛</span>
       </nav>
@@ -653,6 +681,42 @@
             </table>
           </div>
           <p class="cmp-summary" style="margin-top:10px">分数直接取文件里的 Score 标签：写 NS x 记 +x，写 EW x 记 −x（即 NS 一方的原始分）；不按定约重新算分，也不用 ScoreIMP。X-IMP：本桌 NS 分与每一其他桌 NS 分之差按标准 IMP 表换算后求和，再除以（有得分的桌数 − 1），保留两位小数；只有一桌、或本行没有得分时显示 —。点任意一行，下方牌桌就显示那一桌的叫牌与出牌过程。</p>
+        </div>
+      </section>
+
+      <!-- ============ tab 4: X-IMP ranking of every pair in the file ============ -->
+      <section id="viewRank" class="hidden" aria-label="X-IMP排名">
+        <div class="view-bar">
+          <button class="btn" id="btnBackFromRank" type="button">← 返回比赛列表</button>
+          <span class="vb-title">X-IMP排名</span>
+          <span class="vb-sub">整个文件里每一对选手的 X-IMP 累加后除以计入副数，按平均 X-IMP 从高到低排名</span>
+        </div>
+        <div class="empty-state" id="rankEmpty">
+          <div class="es-title">尚未指定 PBN 文件</div>
+          <p class="es-text">先到第一个标签页上传 PBN 文件，这里会把文件里所有牌、所有桌的 X-IMP 按对累加并排名。</p>
+          <div class="es-actions"><button class="btn primary" id="btnRankGoUpload" type="button">去上传 PBN 文件</button></div>
+        </div>
+        <div id="rankContent" class="hidden">
+          <div class="matches-head" style="margin-bottom:10px">
+            <h2 class="matches-title"><span id="rankTitleName">队名列表</span> <span id="rankTitleCount"></span></h2>
+          </div>
+          <p class="cmp-summary" id="rankSummary"></p>
+          <div class="board-table-wrap" id="rankTableWrap">
+            <table class="rank-table" id="rankTable" aria-label="所有选手对的 X-IMP 排名">
+              <thead>
+                <tr>
+                  <th scope="col" class="rk-rank">排名</th>
+                  <th scope="col">Pair</th>
+                  <th scope="col">队伍</th>
+                  <th scope="col" class="rk-boards">副数</th>
+                  <th scope="col">X-IMP总和</th>
+                  <th scope="col">平均X-IMP</th>
+                </tr>
+              </thead>
+              <tbody id="rankRows"></tbody>
+            </table>
+          </div>
+          <p class="cmp-summary" id="rankNote" style="margin-top:10px">计算口径与「同牌比较」相同：每副牌每桌先按 Score 标签取 NS 原始分（NS x 记 +x，EW x 记 −x，不用 ScoreIMP），该桌的 X-IMP 为它与每一其他有得分桌的分差按标准 IMP 表换算后求和、再除以（有得分的桌数 − 1）；坐 EW 的一对取相反数。只有一桌或没有得分的副不计入。每对的平均 X-IMP = X-IMP 总和 ÷ 计入副数；排名先按平均 X-IMP 从高到低，平局按 X-IMP 总和从高到低，再按 Pair 名排序。队伍按 HomeTeam / VisitTeam 与房间坐向确定：一对在不同记录里队伍不一致、或文件没有队伍标签时留空。</p>
         </div>
       </section>
 
@@ -2198,6 +2262,104 @@
         row.addEventListener("keydown", function(e){ if(e.key === "Enter" || e.key === " "){ e.preventDefault(); selectCompareRow(pos); } });
       });
     }
+    /* ============ tab 4: X-IMP ranking across the whole file ============
+       Same X-IMP definition as tab 3, accumulated per pair over EVERY
+       board and table of the loaded file (no match / board selection):
+       for each board number, each scored table's X-IMP_NS is the sum
+       of impFromPointDiff(Si - Sj) over every other scored table j,
+       divided by (N - 1); the pair sitting EW on that record gets
+       -X-IMP_NS. Boards with fewer than two scored tables contribute
+       nothing. A pair is the unordered combination of its two players'
+       cleaned names (# suffix stripped, as everywhere else), so the
+       same two players merge whether they sat NS or EW and whichever
+       of them sat North/East. Per pair: sum of its counted X-IMPs,
+       counted boards, average = sum / boards. Ranking: average high
+       to low, ties by sum high to low, then by pair name. The team
+       column uses cmpSideTeams (HomeTeam / VisitTeam by room and
+       side) and is shown only when every counted record of the pair
+       agrees on one non-empty team; otherwise it stays blank. */
+    function rankPairOf(b, s1, s2){
+      var a = cleanPlayerName(b.players && b.players[s1]);
+      var c = cleanPlayerName(b.players && b.players[s2]);
+      if(!a && !c) return null; // no identifiable pair on this side
+      var names = [a, c].sort(function(x, y){ return x < y ? -1 : (x > y ? 1 : 0); });
+      return {key: names.join(""), label: (names[0] || "—") + " & " + (names[1] || "—")};
+    }
+    function computeRankings(){
+      // group every record of the file by board number
+      var byBoard = {};
+      allParsed.forEach(function(b, i){
+        var bn = boardKeyOf(b, i);
+        if(!byBoard[bn]) byBoard[bn] = [];
+        byBoard[bn].push(b);
+      });
+      var pairs = {}, countedBoards = 0;
+      Object.keys(byBoard).forEach(function(bn){
+        var recs = byBoard[bn].map(function(b){ return {b: b, ns: scoreNSPoints(b)}; })
+          .filter(function(r){ return r.ns !== null; });
+        if(recs.length < 2) return; // lone / unscored board: no X-IMP
+        countedBoards++;
+        recs.forEach(function(r){
+          var impSum = 0;
+          recs.forEach(function(o){ if(o !== r) impSum += impFromPointDiff(r.ns - o.ns); });
+          var xNs = impSum / (recs.length - 1);
+          var teams = cmpSideTeams(r.b);
+          [["N", "S", xNs, teams.ns], ["E", "W", -xNs, teams.ew]].forEach(function(side){
+            var p = rankPairOf(r.b, side[0], side[1]);
+            if(!p) return;
+            var e = pairs[p.key];
+            if(!e){ e = pairs[p.key] = {label: p.label, sum: 0, boards: 0, teams: {}}; }
+            e.sum += side[2];
+            e.boards++;
+            if(side[3]) e.teams[side[3]] = true;
+          });
+        });
+      });
+      var rows = Object.keys(pairs).map(function(k){
+        var e = pairs[k];
+        var teamNames = Object.keys(e.teams);
+        return {
+          label: e.label,
+          team: teamNames.length === 1 ? teamNames[0] : "",
+          boards: e.boards,
+          sum: e.sum,
+          avg: e.boards ? e.sum / e.boards : 0
+        };
+      });
+      rows.sort(function(a, b){
+        if(b.avg !== a.avg) return b.avg - a.avg;
+        if(b.sum !== a.sum) return b.sum - a.sum;
+        return a.label < b.label ? -1 : (a.label > b.label ? 1 : 0);
+      });
+      return {rows: rows, countedBoards: countedBoards, totalBoards: Object.keys(byBoard).length};
+    }
+    function renderRank(){
+      var has = allParsed.length > 0;
+      $("rankEmpty").classList.toggle("hidden", has);
+      $("rankContent").classList.toggle("hidden", !has);
+      if(!has) return;
+      if($("rankTitleName")) $("rankTitleName").textContent = pbnDisplayName(loadedSourceName);
+      if($("rankTitleCount")) $("rankTitleCount").textContent = fileMatches.length ? "（共 " + fileMatches.length + " 场比赛）" : "";
+      var res = computeRankings();
+      var rows = res.rows;
+      $("rankSummary").innerHTML = rows.length
+        ? "共 <b>" + rows.length + "</b> 对选手 · 计入 <b>" + res.countedBoards + "</b> 副牌（共 " + res.totalBoards + " 副，其中至少两桌有得分的才计入） · 已按平均 X-IMP 从高到低排名"
+        : "本文件里没有至少两桌有得分的同一副牌，无法计算 X-IMP 排名（共 " + res.totalBoards + " 副牌）。";
+      $("rankTableWrap").classList.toggle("hidden", !rows.length);
+      $("rankNote").classList.toggle("hidden", !rows.length);
+      var html = "";
+      rows.forEach(function(r, i){
+        html += "<tr>"
+          + '<td class="rk-rank">' + (i + 1) + "</td>"
+          + '<td><span class="rk-pair">' + esc(r.label) + "</span></td>"
+          + '<td class="rk-team">' + (r.team ? esc(r.team) : "") + "</td>"
+          + '<td class="rk-boards">' + r.boards + "</td>"
+          + '<td class="rk-num ' + (r.sum > 0 ? "pos" : r.sum < 0 ? "neg" : "") + '">' + cmpXImpText(r.sum) + "</td>"
+          + '<td class="rk-num rk-avg ' + (r.avg > 0 ? "pos" : r.avg < 0 ? "neg" : "") + '">' + cmpXImpText(r.avg) + "</td></tr>";
+      });
+      $("rankRows").innerHTML = html;
+    }
+
     function syncCompareActive(){
       var box = $("cmpRows"); if(!box) return;
       box.querySelectorAll("tr[data-cmp-pos]").forEach(function(row){
@@ -2918,7 +3080,9 @@
        Tab 3 "compare": every record of the loaded file grouped by
        board number, sorted by NS raw score; clicking a row borrows
        the same replay table for that table's record (see
-       selectCompareRow), and leaving tab 3 restores tab 2's boards. */
+       selectCompareRow), and leaving tab 3 restores tab 2's boards.
+       Tab 4 "rank": every pair of the whole loaded file ranked by its
+       average X-IMP (see computeRankings); read-only, borrows nothing. */
     var appView = "matches";
     var selectedMatch = -1;
     var loadedMatchIdx = -1;
@@ -2956,12 +3120,13 @@
       }
     }
     function applyView(){
-      var isM = appView === "matches", isBG = appView === "boardgame", isCmp = appView === "compare";
+      var isM = appView === "matches", isBG = appView === "boardgame", isCmp = appView === "compare", isRank = appView === "rank";
       var inScope = isBG && boardsInScope();
       var cmpScope = isCmp && compareActive && curIdx >= 0 && boards.length > 0;
       $("viewMatches").classList.toggle("hidden", !isM);
       $("viewMatchDetail").classList.toggle("hidden", !isBG);
       $("viewCompare").classList.toggle("hidden", !isCmp);
+      $("viewRank").classList.toggle("hidden", !isRank);
       $("loaderSection").classList.toggle("hidden", !isM);
       $("listSection").classList.toggle("hidden", !inScope);
       $("viewer").classList.toggle("hidden", !(inScope || cmpScope));
@@ -2972,13 +3137,16 @@
       $("tabMatches").classList.toggle("on", isM);
       $("tabBoardGame").classList.toggle("on", isBG);
       $("tabCompare").classList.toggle("on", isCmp);
+      $("tabRank").classList.toggle("on", isRank);
       var t = "队式赛 · 比赛列表与 PBN 载入";
       if(isBG && selectedMatch >= 0 && fileMatches[selectedMatch]){ var m = fileMatches[selectedMatch]; t = matchDisplayHome(m) + " vs " + matchDisplayAway(m) + " · 本场牌面与打牌过程"; }
       else if(isBG) t = "尚未选择比赛";
       else if(isCmp) t = allParsed.length ? "同牌比较 · 共 " + cmpBoardLabels().length + " 副牌" : "同牌比较 · 尚未载入文件";
+      else if(isRank) t = allParsed.length ? "X-IMP排名 · " + pbnDisplayName(loadedSourceName) : "X-IMP排名 · 尚未载入文件";
       $("navTitle").textContent = t;
       if(isBG) refreshBoardGame();
       if(isCmp) renderCompare();
+      if(isRank) renderRank();
     }
     function goView(v){
       // Leaving tab 3 hands `boards` back to tab 2 first, so the
@@ -3055,9 +3223,12 @@
     $("tabMatches").addEventListener("click", showMatchesView);
     $("tabBoardGame").addEventListener("click", function(){ goView("boardgame"); });
     $("tabCompare").addEventListener("click", function(){ goView("compare"); });
+    $("tabRank").addEventListener("click", function(){ goView("rank"); });
     $("btnBackToMatches").addEventListener("click", showMatchesView);
     $("btnBackFromCompare").addEventListener("click", showMatchesView);
+    $("btnBackFromRank").addEventListener("click", showMatchesView);
     if($("btnCmpGoUpload")) $("btnCmpGoUpload").addEventListener("click", function(){ goView("matches"); $("loaderSection").scrollIntoView({behavior:"smooth", block:"start"}); });
+    if($("btnRankGoUpload")) $("btnRankGoUpload").addEventListener("click", function(){ goView("matches"); $("loaderSection").scrollIntoView({behavior:"smooth", block:"start"}); });
     $("btnStart2").addEventListener("click", function(){ setStep(0); });
     $("btnPrev2").addEventListener("click", function(){ setStep(step-1); });
     $("btnNext2").addEventListener("click", function(){ setStep(step+1); });

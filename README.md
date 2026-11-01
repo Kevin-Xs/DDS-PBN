@@ -2,8 +2,9 @@
 
 Open the replay page from a public URL, pick a PBN file from a
 dropdown in the first tab, and replay it — no upload step needed.
-Everything else is unchanged from the replay page: three-tab
-view (match summary, single-match replay, same-board comparison),
+Everything else is unchanged from the replay page: four-tab
+view (match summary, single-match replay, same-board comparison,
+X-IMP ranking),
 Par contract line, double-dummy table in
 N / S / E / W order, per-card +n / = / −n badges, and the
 first-tab DDS service setting.
@@ -27,6 +28,7 @@ and follow **“Deploy to Render (free)”** below, which is the
 full first-time setup.
 
 **本次更新 (what is new in this version, vs the previous Render package):**
+- 本次更新 (2026-11-01, vs 上一版 Render 包): 新增第四个 tab “X-IMP排名” (排在 “同牌比较” 之后): 覆盖当前载入的整个 PBN 文件的全部牌、全部桌, 复用 “同牌比较” 的 X-IMP 口径 (Score 标签取 NS 原始分, EW x 记负, 不用 ScoreIMP; 每桌 X-IMP = 与其他有得分桌的分差按标准 IMP 表换算求和 ÷ (桌数 − 1), 坐 EW 的一对取相反数; 单桌 / 无得分副不计入), Pair 按无序两人组合合并 (名字去 # 后缀, 坐 NS / EW 都算同一对), 每对的平均 X-IMP = X-IMP 总和 ÷ 计入副数, 按平均从高到低排名; 队伍按坐向确定且一致时才显示, 否则留空; 顶部标题行与其他 tab 一样用 PBN 文件名 (去掉 .pbn 后缀), 未载入文件时只提示去第一页上传。
 - 本次更新 (2026-11-01, vs v1 Render package): 同牌比较新增 “X-IMP” 列 (Score 列之后): 对同一副牌, 本桌 NS 原始分与每一其他桌得分的差值按标准 IMP 表逐一换算、求和, 再除以 (有得分的桌数 − 1), 显示带正负号的两位小数; 只有一桌或无有效得分时显示 —, 且缺得分的行不参与其他桌的计算; 排序仍按 NS 原始分从高到低。
 - 第一 tab 比赛表去掉最后一列 “看牌面”: 表只剩主队 / 客队 / 副数 / IMP / VP 五列, 整行可点击 (回车也可) 进入第二页, 与原来点 “看牌面” 效果相同。
 - 第二 tab 比赛头部的 “赛事:” 值改为 PBN 文件名 (去掉 .pbn 后缀, 例如 2610273252192026DreamlandCup_full (1).pbn 显示为 2610273252192026DreamlandCup_full (1)), 不再用 Event 标签的赛事名; “来自文件:” 行保留。
