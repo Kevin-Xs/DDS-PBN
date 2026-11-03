@@ -10,7 +10,9 @@ Endpoints:
                           "default_requested": <filename or null>},
                           sorted by filename, *.pbn files directly in pbn/
   Default file marker: pbn/default.txt (one line, the exact PBN
-  filename to auto-load, e.g. 2610273252192026DreamlandCup_full.pbn).
+  filename to auto-load, e.g. DreamlandCup_R1.pbn). The LIN file
+  is NOT listed in default.txt: it is derived by same PBN stem
+  (see /pbn/ below), so default.txt stays a single PBN line.
   Parsing is tolerant: UTF-8 with optional BOM, first non-empty
   line that does not start with '#', surrounding whitespace
   stripped, and a missing .pbn suffix is added for matching.
@@ -20,15 +22,23 @@ Endpoints:
   otherwise null. With no marker file both are null and the page
   falls back to the first file, exactly as before. default.txt
   itself is never listed as a PBN file and /pbn/default.txt is
-  still rejected (400, non-.pbn).
-  GET /pbn/<name>      -> that .pbn file as text/plain; charset=utf-8
+  still rejected (400, non-.pbn/.lin/.lin.xml).
+  GET /pbn/<name>      -> that .pbn file as text/plain; charset=utf-8,
+                          or a supplementary LIN file (*.lin / *.lin.xml)
+                          found automatically by PBN filename stem for
+                          the VP ranking (same stem, e.g.
+                          DreamlandCup_R1.pbn -> DreamlandCup_R1.lin).
+                          LIN files are NEVER listed in /api/pbn-list.
   GET /health          -> {"ready": true}  (Render health check)
   GET /<static file>   -> other static files in the package root
                           (.html/.css/.js/.json/.png/.jpg/.svg/.ico only)
 
 Security notes:
   * /pbn/<name> rejects directory traversal, absolute paths, and
-    non-.pbn names. Files are only ever served from inside pbn/.
+    names that are not *.pbn / *.lin / *.lin.xml. Files are only
+    ever served from inside pbn/. *.lin / *.lin.xml are served
+    only as supplementary VP-ranking files; they are never
+    listed by /api/pbn-list (which lists *.pbn only).
   * server.py itself, Dockerfile, render.yaml and .dockerignore are
     never served as static files.
   * CORS Access-Control-Allow-Origin * is added to /api and /pbn
@@ -146,10 +156,14 @@ class Handler(BaseHTTPRequestHandler):
 
         if path.startswith("/pbn/"):
             raw = urllib.parse.unquote(path[len("/pbn/"):])
-            # Reject traversal, separators, absolute paths, non-.pbn names.
+            # Reject traversal, separators, absolute paths, and names
+            # that are not a PBN or a supplementary LIN file.
+            # default.txt ends with none of these, so it is 400 here.
+            low = raw.lower()
             if (not raw or raw != raw.strip() or "/" in raw or "\\" in raw
                     or raw in (".", "..") or raw.startswith(".")
-                    or not raw.lower().endswith(".pbn")):
+                    or not (low.endswith(".pbn") or low.endswith(".lin")
+                            or low.endswith(".lin.xml"))):
                 self._send_json(400, {"error": "invalid pbn filename"})
                 return
             candidate = (PBN_DIR / raw).resolve()
@@ -159,7 +173,7 @@ class Handler(BaseHTTPRequestHandler):
                 self._send_json(400, {"error": "invalid pbn filename"})
                 return
             if not candidate.is_file():
-                self._send_json(404, {"error": "pbn file not found"})
+                self._send_json(404, {"error": "file not found"})
                 return
             self._send_file(candidate, "text/plain; charset=utf-8")
             return

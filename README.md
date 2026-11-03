@@ -9,19 +9,47 @@ Par contract line, double-dummy table in
 N / S / E / W order, per-card +n / = / −n badges, and the
 first-tab DDS service setting.
 
+## 本次更新 2026-11-03 — VP排名 + 同名 LIN 自动查找 (this version)
+
+- **VP排名**：第一 tab 比赛列表下方新增 “VP排名” 列表，按总 VP 降序、并列共享名次（1,1,3…）。
+  列：排名、队伍、C/O、本轮、总 VP。C/O 列**始终显示**，LIN 里没有 `CARRY_FORWARD` 的队伍（第一轮正常情况）按 **0.00** 计，总 VP = C/O + 本轮，不留空、不显示 —、不警告。
+  本轮那一列的表头就是 **“本轮”** 两个字，不带括号和轮次（如不再显示“本轮（第一轮）”）。
+- **手动传 LIN 的入口已删除**：页面上不再有“补充 LIN 文件”按钮。VP 排名的 LIN 改为**按 PBN 文件名自动找**：
+  载入 PBN 后，页面依次向服务器同一 `/pbn/` 路径请求同名 `.lin`、再同名 `.lin.xml`、再旧命名（去掉 `_full` 加 `_lin.xml`），
+  找到第一个能解析出 `PARTICIPANTS` 的就用它的 `TOTAL_SCORE`（本轮）和 `CARRY_FORWARD`（C/O）；
+  找不到任何一个就回退到 PBN 自己按 IMP→WBF 换算的 VP、C/O 0.00，并只注明“未找到同名 LIN 文件，VP 按 PBN 计算”。
+  本包的例子：`DreamlandCup_R1.pbn` → `DreamlandCup_R1.lin`（内容是 USEBIO XML，扩展名是 `.lin`）。
+- **`default.txt` 仍是单行 PBN，不用写两行**：`pbn/default.txt` 只有一行 `DreamlandCup_R1.pbn`。
+  LIN 不用列在 `default.txt` 里，也不用出现在下拉框里——它由 PBN 同名自动推导。
+- **服务器改动（已有服务必须同时推 `index.html` + `server.py` + `pbn/` 文件 + `default.txt`）**：
+  `/api/pbn-list` 仍只列 `*.pbn`（按文件名排序，含 `default` / `default_requested`）；
+  `/pbn/<name>` 现在除了 `*.pbn`，还可 serving 辅助 LIN 文件 `*.lin` / `*.lin.xml`（仅作 VP 排名补充，**不列入下拉框**）；
+  遍历、分隔符、绝对路径、隐藏文件仍拒绝，`default.txt` 本身请求 `/pbn/default.txt` 仍是 400，不存在的文件是 404。
+  `server.py` / `Dockerfile` / `render.yaml` / `.dockerignore` 仍不对外 serving。
+- **本周 / 每周更新（换文件不用重新打包页面）**：把新一对同名文件（例如 `DreamlandCup_R2.pbn` + `DreamlandCup_R2.lin`）
+  放进 `pbn/`，把 `pbn/default.txt` 改成新的 PBN 文件名，push 即可；页面和服务器不用改。
+  旧文件不用时从 `pbn/` 里删掉再 push，否则它仍会出现在下拉框里。
+  注意：PBN 和 LIN 必须**同名**（只差扩展名），否则页面按同名找不到 LIN，就会回退到 PBN 计算。
+- 本包的 PBN 已是修正版：`DreamlandCup_R1.pbn`（640 条记录，16 场比赛，32 支队，第 2 副 Table 15 的东家已由 `???` 修正为 Xinshan Zhao，
+  MD5 见下文），不再是旧的 `2610273252192026DreamlandCup_full.pbn`。LIN 是 `DreamlandCup_R1.lin`（32 支队，无 `CARRY_FORWARD`，
+  所以 VP 排名 C/O 全是 0.00，总 VP = 本轮 `TOTAL_SCORE`：友为先 / 枫雪桥缘 20.00 并列第 1，下一名是第 3）。
+
 ## 更新已有部署 (update an existing deployment)
 
 **If you already have a Render service from the previous version
 of this package, do NOT delete it and do NOT create a new one.**
 
 **⚠️ This update is different from the usual one: replacing
-`index.html` alone is NOT enough this time.** This version adds
-the default-file marker (`pbn/default.txt`), which only works
-if the server returns the new `default` field. So for an
-existing service, push all three changes together:
-`index.html` (new selector logic) **and** `server.py` (new
-`/api/pbn-list` fields) **and** add `pbn/default.txt` (see
-“默认文件（default.txt）” below). The page alone will not
+`index.html` alone is NOT enough this time.** This version changes
+`server.py` (it must now serve `*.lin` / `*.lin.xml` as supplementary
+files) and replaces the `pbn/` contents with the new same-stem pair.
+So for an existing service, push together: `index.html` **and**
+`server.py` **and** the new `pbn/` files (`DreamlandCup_R1.pbn`,
+`DreamlandCup_R1.lin`, `pbn/default.txt`), and remove the old
+`2610273252192026DreamlandCup_full.pbn` from `pbn/` if it is still
+there. The page alone will not break on an old server — it falls
+back to the first file — but auto-LIN lookup will 404 on the old
+server (it rejects `.lin`), so VP ranking will fall back to PBN VP. The page alone will not
 break on an old server — it falls back to the first file — but
 the marker will not work until `server.py` is updated.
 Render auto-redeploys the **same service, with the same URL**,
@@ -48,7 +76,7 @@ has to open the alphabetically first one. Create (or edit)
 auto-load**, for example:
 
 ```
-2610273252192026DreamlandCup_full.pbn
+DreamlandCup_R1.pbn
 ```
 
 How it works and what to remember:
@@ -126,7 +154,7 @@ How it works and what to remember:
 | File | What it is |
 | --- | --- |
 | `index.html` | The replay page (single file, ~1.6 MB). It does **not** embed any PBN: it loads PBNs over HTTP from `/pbn/`, so adding a file later does not require rebuilding this page. |
-| `pbn/` | PBN files served by the service. Initially one file: `2610273252192026DreamlandCup_full.pbn` (2026 Dreamland Cup, 640 records, 16 matches, 32 teams). |
+| `pbn/` | PBN + supplementary LIN files served by the service. This version: `DreamlandCup_R1.pbn` (2026 Dreamland Cup, 640 records, 16 matches, 32 teams, Xinshan Zhao fix) + `DreamlandCup_R1.lin` (USEBIO XML, 32 teams, no CARRY_FORWARD) + `default.txt` (single line: `DreamlandCup_R1.pbn`). Only `*.pbn` appears in the dropdown; `*.lin` is fetched automatically by same stem and never listed. |
 | `server.py` | Python standard library only, no third-party packages. Serves `index.html`, `GET /api/pbn-list`, `GET /pbn/<name>`, and `GET /health`. Binds `0.0.0.0:$PORT` (default 10000). |
 | `Dockerfile` | Python 3.12 slim, copies the files above, runs `server.py`. |
 | `render.yaml` | Render Blueprint: Web Service, Docker, Free plan, health check `/health`. |
@@ -164,7 +192,7 @@ files at the repo root.
    Plan Free, Health Check Path `/health`. Create the service.
 5. Wait for the first deploy to finish, then open the service URL.
    Check `https://<your-service>.onrender.com/health` returns
-   `{"ready": true}`, and `/api/pbn-list` lists the Dreamland Cup file.
+   `{"ready": true}`, and `/api/pbn-list` lists `DreamlandCup_R1.pbn` (and only that `.pbn`; the `.lin` is not listed).
 6. Open the service URL itself: the first tab should show the
    PBN dropdown with the Dreamland Cup file already loaded.
 
@@ -172,15 +200,21 @@ If you create the service by hand instead of from the Blueprint,
 use the same values: Environment Docker, Plan Free, Health Check
 Path `/health`.
 
-## Add a new PBN file later
+## Add a new PBN file later (now as a same-stem PBN + LIN pair)
 
-Just drop a `.pbn` file into the `pbn/` folder and push to GitHub.
-Render redeploys, and the file appears automatically in the dropdown
-— no page rebuild, no manifest edit, no code change. File names
-must be plain file names (no subfolders, no `..`, no spaces needed
+Drop a `.pbn` file **together with its same-stem LIN file** into the `pbn/` folder and push to GitHub.
+Example: `DreamlandCup_R2.pbn` + `DreamlandCup_R2.lin` (same stem, only the extension differs).
+Render redeploys, and the PBN appears automatically in the dropdown — no page rebuild, no manifest edit, no code change.
+The LIN is then found automatically by stem for VP ranking and never appears in the dropdown.
+If you also want the new file to open by default, edit `pbn/default.txt` to that new PBN name and push in the same commit.
+File names must be plain file names (no subfolders, no `..`, no spaces needed
 but allowed — they are URL-encoded in the list).
 
-To remove a file, delete it from `pbn/` and push again.
+To remove a file, delete it (and its LIN pair, if any) from `pbn/` and push again.
+
+GitHub web rename warning: the rename field is the **full path** (`pbn/old.pbn`); replacing it with just `new.pbn`
+moves the file to the repo root, where the server will not list it. Always keep the `pbn/` prefix when renaming
+(e.g. rename to `pbn/new-name.pbn`), then verify the root has no `.pbn` and `/api/pbn-list` lists the file.
 
 ## Free-plan sleep — please read this first
 

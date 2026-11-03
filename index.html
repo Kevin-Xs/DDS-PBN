@@ -396,6 +396,26 @@
         .matches-title{font-size:21px}
       }
 
+      /* ---------- VP ranking (tab 1, below the match list) ---------- */
+      table.vp-rank-table{width:100%;border-collapse:collapse;font-size:15px}
+      table.vp-rank-table th{
+        text-align:left;font-size:13px;color:var(--ink-2);font-weight:700;
+        padding:10px 14px;background:var(--surface-2);border-bottom:1px solid var(--line);white-space:nowrap;
+      }
+      table.vp-rank-table td{padding:11px 14px;border-bottom:1px solid var(--line);vertical-align:middle;font-variant-numeric:tabular-nums}
+      table.vp-rank-table tbody tr:last-child td{border-bottom:none}
+      table.vp-rank-table td.vp-rank-no,table.vp-rank-table th.vp-rank-no{text-align:center;width:64px}
+      table.vp-rank-table td.vp-rank-no{font-weight:800;font-size:16px}
+      table.vp-rank-table td.vp-total{font-weight:800;white-space:nowrap}
+      table.vp-rank-table td.vp-num{white-space:nowrap}
+      .vp-rank-note{font-size:13.5px;color:var(--ink-2);margin:10px 2px 0;line-height:1.6}
+      .vp-rank-note b{color:var(--ink)}
+      @media (max-width:640px){
+        table.vp-rank-table{font-size:13.5px}
+        table.vp-rank-table td,table.vp-rank-table th{padding:9px 7px}
+        table.vp-rank-table td.vp-rank-no{font-size:14px}
+      }
+
       /* ---------- match detail / board comparison ---------- */
       .match-head-card{
         background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);
@@ -633,6 +653,16 @@
             </thead>
             <tbody id="matchRows"></tbody>
           </table>
+        </div>
+        <div id="vpRankWrap" class="hidden" style="margin-top:22px">
+          <h2 class="section-title" style="margin-top:0">VP排名 <span class="count" id="vpRankCount"></span></h2>
+          <div class="board-table-wrap">
+            <table class="vp-rank-table" id="vpRankTable" aria-label="VP排名">
+              <thead id="vpRankHead"></thead>
+              <tbody id="vpRankRows"></tbody>
+            </table>
+          </div>
+          <p class="vp-rank-note" id="vpRankNote"></p>
         </div>
       </section>
 
@@ -1878,6 +1908,9 @@
     var compareActive = false;  // true while the viewer below tab 3 shows a compare row's replay
     var stashMatch = null;      // tab 2 boards/curIdx/step saved while a compare replay borrows `boards`
     var loadedSourceName = "";
+    var auxLin = null;          // auxiliary LIN for VP ranking only, auto-found by PBN filename: {sourceName, teams:{name:{total,carry,hasCarry}}, rounds:[..]}
+    var linLookupState = "none"; // "none" | "pending" | "found" | "notfound": same-name LIN auto-lookup for the current PBN
+    var linLookupSeq = 0;        // bumped on every PBN load so a stale lookup can never attach to a newer file
     var curIdx = -1, step = 0;
 
     var $ = function(id){ return document.getElementById(id); };
@@ -1903,6 +1936,12 @@
       // fixed list. Tab 2 starts empty until a match is clicked, so no
       // other match's boards can leak into it.
       fileMatches = buildMatches(parsed);
+      // A new PBN main file invalidates any auxiliary LIN found for a
+      // previous file: the two must belong to the same event, and a
+      // stale LIN would silently attach another event's VP / carryover
+      // to this file's teams. The matching LIN is then looked up
+      // automatically by filename (see autoFindLinForPbn below).
+      clearAuxLin();
       // Tab 3 (同牌比较) works on EVERY record of this file, across all
       // matches — keep the full parsed list for it.
       allParsed = parsed;
@@ -1919,6 +1958,11 @@
       showMsg("已从文件解析出 " + fileMatches.length + " 场比赛、共 " + parsed.length + " 条记录。请在上方比赛列表里点击一场比赛查看它的牌。", "ok");
       renderMatches();
       goView("matches");
+      // VP ranking's LIN data is found automatically by PBN filename —
+      // there is no manual LIN upload. Only a PBN that came from the
+      // server can have a same-name LIN next to it on that server;
+      // a local upload / paste / sample simply keeps the PBN fallback.
+      autoFindLinForPbn(sourceName);
     }
 
     /* ============ two-table comparison list (screenshot layout) ============
@@ -3180,6 +3224,221 @@
       applyView();
       $("viewer").scrollIntoView({behavior:"smooth", block:"start"});
     }
+    /* ============ auxiliary LIN (VP ranking only) + VP排名 ============
+       The PBN stays the main source for everything (matches, boards,
+       replay, DD table and Par all read the PBN). The LIN is loaded
+       ONLY for the VP排名 below the match list: from its PARTICIPANTS
+       section we take, per TEAM, the TEAM_NAME, TOTAL_SCORE (that
+       team's current-round VP, used as-is — never recomputed from
+       PBN IMPs) and CARRY_FORWARD (carryover VP), plus the file's
+       ROUND_NUMBER values. No boards are parsed out of the LIN and
+       loading it never triggers any double-dummy work.
+       Team matching is exact, by the PBN HomeTeam / VisitTeam name
+       against the LIN TEAM_NAME. A missing CARRY_FORWARD is normal
+       (e.g. round 1 has no carryover): it counts as 0, never as a
+       blank, a dash or a warning, and the C/O column is always
+       shown even when every value is 0.00. A PBN team with no LIN
+       entry falls back to its PBN-computed round VP (IMP -> WBF VP,
+       summed over its matches) with C/O 0, so every PBN team is
+       always listed. When no LIN is loaded at all, the ranking is
+       exactly that PBN fallback for every team, with C/O 0. */
+    function xmlUnescape(s){
+      return String(s == null ? "" : s)
+        .replace(/&#x([0-9a-fA-F]+);/g, function(m, h){ return String.fromCharCode(parseInt(h, 16)); })
+        .replace(/&#(\d+);/g, function(m, d){ return String.fromCharCode(parseInt(d, 10)); })
+        .replace(/&lt;/g, "<").replace(/&gt;/g, ">")
+        .replace(/&quot;/g, '"').replace(/&apos;/g, "'")
+        .replace(/&amp;/g, "&");
+    }
+    function linChildNumber(body, tag){
+      var m = String(body).match(new RegExp("<" + tag + "\\b[^>]*>\\s*([^<]*?)\\s*<\\/" + tag + ">", "i"));
+      if(!m) return null;
+      var v = parseFloat(m[1]);
+      return isNaN(v) ? null : v;
+    }
+    function parseAuxLin(text){
+      var s = String(text || "");
+      var part = s.match(/<PARTICIPANTS\b[^>]*>([\s\S]*?)<\/PARTICIPANTS>/i);
+      var scope = part ? part[1] : s;
+      var teams = {}, count = 0;
+      var teamRe = /<TEAM\b([^>]*)>([\s\S]*?)<\/TEAM>/gi, m;
+      while((m = teamRe.exec(scope)) !== null){
+        var attrs = m[1], body = m[2];
+        var nm = attrs.match(/\bTEAM_NAME\s*=\s*"([^"]*)"/i) || attrs.match(/\bTEAM_NAME\s*=\s*'([^']*)'/i);
+        if(!nm) continue;
+        var name = xmlUnescape(nm[1]).trim();
+        if(!name || teams[name]) continue;
+        var carryRaw = linChildNumber(body, "CARRY_FORWARD");
+        // No CARRY_FORWARD tag is normal (round 1): carryover is 0.
+        var carry = carryRaw === null ? 0 : carryRaw;
+        teams[name] = {
+          total: linChildNumber(body, "TOTAL_SCORE"),
+          carry: carry,
+          hasCarry: true
+        };
+        count++;
+      }
+      if(!count) return null;
+      var rounds = [], seenRound = {};
+      var roundRe = /<ROUND_NUMBER\b[^>]*>\s*([^<]*?)\s*<\/ROUND_NUMBER>/gi, rm;
+      while((rm = roundRe.exec(s)) !== null){
+        var rv = xmlUnescape(rm[1]).trim();
+        if(rv && !seenRound[rv]){ seenRound[rv] = true; rounds.push(rv); }
+      }
+      return {teams: teams, rounds: rounds};
+    }
+    function clearAuxLin(){
+      auxLin = null;
+      linLookupState = "none";
+      linLookupSeq++;
+    }
+    /* Same-name LIN lookup. The LIN belonging to a PBN is found purely
+       by filename — Kevin keeps the pair named alike:
+         DreamlandCup_R1.pbn -> DreamlandCup_R1.lin
+       Candidates, in order:
+         1. <base>.lin        (same name, .lin extension; content is
+                               USEBIO XML, parsed as such)
+         2. <base>.lin.xml    (same name, .lin.xml extension)
+         3. legacy: a PBN name ending in _full maps to the name with
+            _full dropped plus _lin.xml, e.g.
+            2610273252192026DreamlandCup_full.pbn
+              -> 2610273252192026DreamlandCup_lin.xml
+       The first candidate that exists on the server AND parses as
+       USEBIO PARTICIPANTS wins. The LIN is requested from the same
+       server path as the PBN itself ("/pbn/<name>", the path the
+       Render service uses for the PBN files). */
+    function linCandidateNames(pbnName){
+      var name = String(pbnName || "").trim();
+      if(!/\.pbn$/i.test(name)) return [];
+      var base = name.replace(/\.pbn$/i, "");
+      var out = [base + ".lin", base + ".lin.xml"];
+      if(/_full$/i.test(base)) out.push(base.replace(/_full$/i, "") + "_lin.xml");
+      return out;
+    }
+    function autoFindLinForPbn(pbnName){
+      var seq = ++linLookupSeq;
+      var candidates = linCandidateNames(pbnName);
+      if(!candidates.length || typeof fetch !== "function"){
+        linLookupState = "none";
+        renderVpRanking();
+        return;
+      }
+      linLookupState = "pending";
+      renderVpRanking();
+      var i = 0;
+      function tryNext(){
+        if(seq !== linLookupSeq) return; // a newer PBN superseded this lookup
+        if(i >= candidates.length){
+          linLookupState = "notfound";
+          renderVpRanking();
+          return;
+        }
+        var cand = candidates[i++];
+        fetch("/pbn/" + encodeURIComponent(cand)).then(function(r){
+          if(!r.ok) throw new Error("HTTP " + r.status);
+          return r.text();
+        }).then(function(txt){
+          if(seq !== linLookupSeq) return;
+          var parsedLin = null;
+          try { parsedLin = parseAuxLin(txt); } catch(e){ parsedLin = null; }
+          if(!parsedLin){ tryNext(); return; }
+          auxLin = {sourceName: cand, teams: parsedLin.teams, rounds: parsedLin.rounds};
+          linLookupState = "found";
+          renderVpRanking();
+        }).catch(function(){ tryNext(); });
+      }
+      tryNext();
+    }
+    function renderVpRanking(){
+      var wrap = $("vpRankWrap"); if(!wrap) return;
+      // Teams come from the PBN only (named matches): the LIN never
+      // adds a team of its own to this list.
+      var teamNames = [], seenTeam = {};
+      fileMatches.forEach(function(m){
+        if(!m.named) return;
+        [m.home, m.away].forEach(function(t){
+          var name = String(t || "").trim();
+          if(name && !seenTeam[name]){ seenTeam[name] = true; teamNames.push(name); }
+        });
+      });
+      var has = teamNames.length > 0;
+      wrap.classList.toggle("hidden", !has);
+      if(!has) return;
+      // PBN fallback round VP per team: that team's VP summed over
+      // its matches in this file (home VP / 20 - home VP), from the
+      // match list's own IMP -> WBF conversion. Matches without a
+      // complete IMP contribute nothing, as in the match list.
+      var pbnVP = {};
+      fileMatches.forEach(function(m){
+        if(!m.named || m.vpHome === null || m.vpHome === undefined) return;
+        var h = String(m.home || "").trim(), a = String(m.away || "").trim();
+        if(h) pbnVP[h] = (pbnVP[h] || 0) + m.vpHome;
+        if(a) pbnVP[a] = (pbnVP[a] || 0) + (20 - m.vpHome);
+      });
+      var matched = 0;
+      var rows = teamNames.map(function(name){
+        var lin = auxLin ? auxLin.teams[name] : null;
+        var fromLin = !!(lin && typeof lin.total === "number");
+        if(lin) matched++;
+        var roundVP = fromLin ? lin.total
+          : (Object.prototype.hasOwnProperty.call(pbnVP, name) ? pbnVP[name] : null);
+        // Carryover is always a number: a LIN team without a
+        // CARRY_FORWARD tag (normal in round 1) and a PBN team with
+        // no LIN entry at all both count as 0.
+        var carry = (lin && typeof lin.carry === "number") ? lin.carry : 0;
+        var total = (roundVP === null) ? null : roundVP + carry;
+        return {team: name, roundVP: roundVP, carry: carry, hasCarry: true, fromLin: fromLin, total: total};
+      });
+      rows.sort(function(a, b){
+        if(a.total === null && b.total !== null) return 1;
+        if(a.total !== null && b.total === null) return -1;
+        if(a.total !== null && b.total !== null && b.total !== a.total) return b.total - a.total;
+        var ra = a.roundVP === null ? -Infinity : a.roundVP, rb = b.roundVP === null ? -Infinity : b.roundVP;
+        if(rb !== ra) return rb - ra;
+        return a.team < b.team ? -1 : (a.team > b.team ? 1 : 0);
+      });
+      // Round label for the 本轮 column header: the LIN's single
+      // ROUND_NUMBER wins, then the PBN's single Round, else 本轮.
+      var roundLabel = "本轮";
+      if(auxLin && auxLin.rounds.length === 1) roundLabel = auxLin.rounds[0];
+      else {
+        var pbnRounds = {}, pbnRoundList = [];
+        fileMatches.forEach(function(m){ if(m.round && !pbnRounds[m.round]){ pbnRounds[m.round] = true; pbnRoundList.push(m.round); } });
+        if(pbnRoundList.length === 1) roundLabel = pbnRoundList[0];
+      }
+      var roundHead = "本轮";
+      $("vpRankHead").innerHTML = '<tr><th scope="col" class="vp-rank-no">排名</th><th scope="col">队伍</th>'
+        + '<th scope="col">C/O</th>'
+        + '<th scope="col">' + esc(roundHead) + '</th><th scope="col">总VP</th></tr>';
+      var html = "", rank = 0, prevTotal = null;
+      rows.forEach(function(r, i){
+        if(r.total === null){ rank = i + 1; prevTotal = null; }
+        else if(prevTotal === null || Math.abs(r.total - prevTotal) > 0.005){ rank = i + 1; prevTotal = r.total; }
+        html += "<tr>"
+          + '<td class="vp-rank-no">' + rank + "</td>"
+          + '<td><span class="team-name">' + esc(r.team) + "</span></td>"
+          + '<td class="vp-num">' + fmtVP(r.carry) + "</td>"
+          + '<td class="vp-num">' + (r.roundVP === null ? '<span class="muted">—</span>' : fmtVP(r.roundVP)) + "</td>"
+          + '<td class="vp-total">' + (r.total === null ? '<span class="muted">—</span>' : fmtVP(r.total)) + "</td></tr>";
+      });
+      $("vpRankRows").innerHTML = html;
+      $("vpRankCount").textContent = "（共 " + rows.length + " 支队伍）";
+      var note;
+      if(auxLin){
+        note = "按总 VP 从高到低排列，并列共享名次。本轮 VP 与 C/O 取自 LIN 文件「<b>" + esc(auxLin.sourceName)
+          + "</b>」的 PARTICIPANTS（本轮 = TOTAL_SCORE，C/O = CARRY_FORWARD，没有 CARRY_FORWARD 的队伍按 0.00 计，总 VP = C/O + 本轮），已按队名精确匹配 <b>"
+          + matched + " / " + rows.length + "</b> 支队伍"
+          + (matched < rows.length ? "；LIN 里找不到的队伍，本轮改用 PBN 按 IMP 换算的 VP，C/O 按 0.00 计，总 VP 即该 PBN VP" : "")
+          + "。比赛、牌局与双明手仍全部来自 PBN。";
+      } else if(linLookupState === "pending") {
+        note = "按总 VP 从高到低排列，并列共享名次。正在按 PBN 文件名在服务器上查找同名 LIN 文件，找到后本轮与 C/O 改取 LIN 的 TOTAL_SCORE / CARRY_FORWARD；暂先按 PBN 计算显示。";
+      } else if(linLookupState === "notfound") {
+        note = "按总 VP 从高到低排列，并列共享名次。未找到同名 LIN 文件，VP 按 PBN 计算：本轮 VP 由 PBN 的 IMP 按 WBF 连续 VP 表换算，C/O 按 0.00 计，总 VP 即本轮 VP。";
+      } else {
+        note = "按总 VP 从高到低排列，并列共享名次。VP 按 PBN 计算：本轮 VP 由 PBN 的 IMP 按 WBF 连续 VP 表换算，C/O 按 0.00 计，总 VP 即本轮 VP。";
+      }
+      $("vpRankNote").innerHTML = note;
+    }
     function renderMatches(){
       var has = fileMatches.length > 0;
       $("matchEmpty").classList.toggle("hidden", has);
@@ -3207,6 +3466,7 @@
         row.addEventListener("click", function(){ openMatch(i); });
         row.addEventListener("keydown", function(e){ if(e.key === "Enter" || e.key === " "){ e.preventDefault(); openMatch(i); } });
       });
+      renderVpRanking();
     }
     function renderMatchDetail(){
       // Reached only when no match is selected (a selected match always
@@ -3237,7 +3497,13 @@
     if($("btnEmptyUpload")) $("btnEmptyUpload").addEventListener("click", function(){ $("loaderSection").scrollIntoView({behavior:"smooth", block:"start"}); });
     renderMatches();
 
-    /* Render PBN selector: list files from /api/pbn-list, load via loadText.
+    /* No preload: with no file specified, tab 1 only prompts for an
+       upload and the match list stays empty — no built-in matches or
+       sample boards are presented as if they came from a file. The
+       sample is still available on demand via 载入示例牌局 on tab 1. */
+    showMatchesView();
+
+/* Render PBN selector: list files from /api/pbn-list, load via loadText.
        Auto-load behaviour: this page starts with no file loaded (the
        "No preload" note below), so if the list is non-empty one file
        is auto-loaded once at startup: the file named by pbn/default.txt
@@ -3293,11 +3559,6 @@
       loadRenderPbnFile({name: opt.dataset.name || opt.textContent, url: opt.value, size: 0});
     });
 
-    /* No preload: with no file specified, tab 1 only prompts for an
-       upload and the match list stays empty — no built-in matches or
-       sample boards are presented as if they came from a file. The
-       sample is still available on demand via 载入示例牌局 on tab 1. */
-    showMatchesView();
     loadRenderPbnList();
     </script>
   </body>
