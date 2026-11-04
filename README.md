@@ -9,6 +9,22 @@ Par contract line, double-dummy table in
 N / S / E / W order, per-card +n / = / −n badges, and the
 first-tab DDS service setting.
 
+## 本次更新 2026-11-04 — DreamlandCup_R2 + Par 定约修正 + 比赛列表获胜队红粗 (this version)
+
+- **本包的比赛文件换成 R2**：`pbn/` 里现在只有 `DreamlandCup_R2.pbn` + `DreamlandCup_R2.lin`，`pbn/default.txt` 只有一行 `DreamlandCup_R2.pbn`（仍是单行，不用写两行，LIN 由同名自动推导）。
+  R2 PBN：640 条记录，20 副，16 场比赛，32 支队，MD5 `691259118c57e9163bb4bd28c884eb8c`。
+  R2 LIN：USEBIO XML，32 支队，MD5 `98a1035d89fa0b6b7dd4d1d8bec9847d`。
+  旧的 `DreamlandCup_R1.pbn` / `DreamlandCup_R1.lin` 已从本包 `pbn/` 里删掉（不是删 Render 服务，只是换文件）；如果你仓库里还留着 R1 文件，推本包时一并删掉，否则下拉框里会出现 R1 和 R2 两个文件。
+- **Par 定约修正（标准 Par 逻辑）**：Par 定约计算重写——从文件 `DoubleDummyTricks` + 局况出发推演叫牌，牺牲定约一律按加倍后的罚分评估（对手对宕定约在加倍优于放过/再叫时必然加倍），不再出现“某个定约不加倍罚分恰好等于 Par 分数”就被选中的错误。
+  本包验证：R2 第 1 副（3♠X 北家，9 墩，NS 530，双方无局，`DoubleDummyTricks` `4953149531846ab847ab`，`OptimumScore` NS -300）Par 行是 **NS -300 · 5♠ N X / 5♠ S X**，不是 5♥。Par 分数仍取文件 `OptimumScore`，没有改动。
+- **比赛列表（第一个 tab 的第一个列表，仅此表）**：获胜队（IMP 赢得比对手多的一方）队名**红色粗体**（`winner` 类，只限定在 `table.match-table` 内，平局两队都不加红）；
+  IMP 和 VP 两列**不加颜色**（去掉原来 IMP 按胜负染绿/红的逻辑），格式改为空格分开，例如 **92 : 25**、**19.99 : 0.01**。数值、排序、VP 排名、其他 tab 和牌桌均未改动；tab2 的比赛头仍用原来的紧凑格式。
+- **VP 排名（R2 有真实 C/O，不再是全 0）**：逻辑与 R1 包相同，但 R2 LIN 里 32 支队**全部**有 `CARRY_FORWARD`，所以 C/O 列显示真实数值，总 VP = C/O + 本轮（本轮 = LIN `TOTAL_SCORE`，C/O = LIN `CARRY_FORWARD`，即 R1 的本轮 VP）。
+  本地核对（LIN CF + TOTAL）：老友 18.91 + 20.00 = 38.91 第 1，上海老克勒 19.25 + 18.73 = 37.98 第 2，乔家大院一队 14.01 + 18.63 = 32.64，枫雪桥缘 20.00 + 12.30 = 32.30，A Team 15.11 + 16.52 = 31.63，美加乐 12.30 + 19.99 = 32.29（按总 VP 排序在枫雪桥缘之后、A Team 之前，见页面实际行序）。
+  注意：R2 比赛列表里的 VP（例如美加乐对休城十月天 19.99 : 0.01）是本轮 VP，不是总 VP；总 VP 只在 VP 排名里。
+- **服务器没有回归**：`server.py` 仍是 R1 包那版（已能 serving 辅助 LIN 文件 `*.lin` / `*.lin.xml`，`/api/pbn-list` 只列 `*.pbn` + 验证过的 `default` / `default_requested`，`/health`、`CORS *`、遍历/`default.txt` 400、不存在 404、从不 serving `server.py`/`Dockerfile`/`render.yaml`）。R2 文件名不需要服务器改动，但已有服务仍需把本包的 `index.html` + `server.py` + `pbn/` 文件 + `default.txt` 一起推上去。
+- **每周更新（换文件不用重新打包页面）**：把新一对同名文件（例如 `DreamlandCup_R3.pbn` + `DreamlandCup_R3.lin`）放进 `pbn/`，把 `pbn/default.txt` 改成新的 PBN 文件名，push 即可；页面和服务器不用改。PBN 和 LIN 必须同名（只差扩展名），否则页面按同名找不到 LIN，就会回退到 PBN 计算。
+
 ## 本次更新 2026-11-03 — VP排名 + 同名 LIN 自动查找 (this version)
 
 - **VP排名**：第一 tab 比赛列表下方新增 “VP排名” 列表，按总 VP 降序、并列共享名次（1,1,3…）。
@@ -44,10 +60,10 @@ of this package, do NOT delete it and do NOT create a new one.**
 `server.py` (it must now serve `*.lin` / `*.lin.xml` as supplementary
 files) and replaces the `pbn/` contents with the new same-stem pair.
 So for an existing service, push together: `index.html` **and**
-`server.py` **and** the new `pbn/` files (`DreamlandCup_R1.pbn`,
-`DreamlandCup_R1.lin`, `pbn/default.txt`), and remove the old
-`2610273252192026DreamlandCup_full.pbn` from `pbn/` if it is still
-there. The page alone will not break on an old server — it falls
+`server.py` **and** the new `pbn/` files (`DreamlandCup_R2.pbn`,
+`DreamlandCup_R2.lin`, `pbn/default.txt`), and remove the old
+`DreamlandCup_R1.pbn` / `DreamlandCup_R1.lin` from `pbn/` if they are
+still there. The page alone will not break on an old server — it falls
 back to the first file — but auto-LIN lookup will 404 on the old
 server (it rejects `.lin`), so VP ranking will fall back to PBN VP. The page alone will not
 break on an old server — it falls back to the first file — but
@@ -154,7 +170,7 @@ How it works and what to remember:
 | File | What it is |
 | --- | --- |
 | `index.html` | The replay page (single file, ~1.6 MB). It does **not** embed any PBN: it loads PBNs over HTTP from `/pbn/`, so adding a file later does not require rebuilding this page. |
-| `pbn/` | PBN + supplementary LIN files served by the service. This version: `DreamlandCup_R1.pbn` (2026 Dreamland Cup, 640 records, 16 matches, 32 teams, Xinshan Zhao fix) + `DreamlandCup_R1.lin` (USEBIO XML, 32 teams, no CARRY_FORWARD) + `default.txt` (single line: `DreamlandCup_R1.pbn`). Only `*.pbn` appears in the dropdown; `*.lin` is fetched automatically by same stem and never listed. |
+| `pbn/` | PBN + supplementary LIN files served by the service. This version: `DreamlandCup_R2.pbn` (2026 Dreamland Cup R2, 640 records, 20 boards, 16 matches, 32 teams) + `DreamlandCup_R2.lin` (USEBIO XML, 32 teams, all with CARRY_FORWARD) + `default.txt` (single line: `DreamlandCup_R2.pbn`). Only `*.pbn` appears in the dropdown; `*.lin` is fetched automatically by same stem and never listed. |
 | `server.py` | Python standard library only, no third-party packages. Serves `index.html`, `GET /api/pbn-list`, `GET /pbn/<name>`, and `GET /health`. Binds `0.0.0.0:$PORT` (default 10000). |
 | `Dockerfile` | Python 3.12 slim, copies the files above, runs `server.py`. |
 | `render.yaml` | Render Blueprint: Web Service, Docker, Free plan, health check `/health`. |
@@ -192,7 +208,7 @@ files at the repo root.
    Plan Free, Health Check Path `/health`. Create the service.
 5. Wait for the first deploy to finish, then open the service URL.
    Check `https://<your-service>.onrender.com/health` returns
-   `{"ready": true}`, and `/api/pbn-list` lists `DreamlandCup_R1.pbn` (and only that `.pbn`; the `.lin` is not listed).
+   `{"ready": true}`, and `/api/pbn-list` lists `DreamlandCup_R2.pbn` (and only that `.pbn`; the `.lin` is not listed).
 6. Open the service URL itself: the first tab should show the
    PBN dropdown with the Dreamland Cup file already loaded.
 

@@ -386,6 +386,9 @@
       td.imp.win{color:var(--accent);font-weight:800}
       td.imp.lose{color:var(--red);font-weight:800}
       .team-name{font-weight:600}
+      /* match list only: the winning team's name is red and bold
+         (IMP / VP scores themselves stay uncoloured) */
+      table.match-table .team-name.winner{color:var(--red);font-weight:800}
       .row-arrow{color:var(--ink-2);font-size:13px;white-space:nowrap}
       @media (max-width:640px){
         table.match-table td,table.match-table th{padding:10px 7px}
@@ -1167,13 +1170,16 @@
        the agreed fallback, the Par contract is NOT re-solved from the
        deal; it is computed from the double-dummy table already in the
        file (DoubleDummyTricks, falling back to OptimumResultTable)
-       plus the [Vulnerable] tag, using the standard par rules: a
-       bidding equilibrium over the 20 known trick numbers in which
-       each side, in turn, may pass, outbid with a higher contract,
-       double an opponent's contract, or redouble its own — contracts
-       are scored with ordinary duplicate scoring, so a sacrifice is
-       chosen exactly when its (doubled) penalty beats letting the
-       opponents' making contract stand. The local / Render service is
+       plus the [Vulnerable] tag, by playing the standard par auction
+       out over the 20 known trick numbers: the side that does not own
+       the current contract may outbid it with a higher contract or
+       double it, contracts are scored with ordinary duplicate
+       scoring, and a failing contract is always evaluated at its
+       DOUBLED penalty — the opponents double a failing contract
+       whenever that beats passing it (it always does) or bidding on,
+       so a sacrifice counts only at its doubled cost, never at an
+       undoubled penalty that merely matches the par score. The
+       local / Render service is
        not involved (it has no Par endpoint) and the per-card badge
        engine logic is untouched.
        The result is cached on the board object itself (b._parCalc),
@@ -1280,102 +1286,95 @@
         }
         scoreTab.push(perSide);
       }
-      function runGame(firstTurn){
-        var memo = {};
-        function solve(rank, owner, dbl, passes, turn){
-          if(rank >= 0 && passes >= 2) return scoreTab[rank][owner][dbl];
-          if(rank < 0 && passes >= 3) return 0;
-          var key = rank + "|" + owner + "|" + dbl + "|" + passes + "|" + turn;
-          if(memo[key] !== undefined) return memo[key];
-          var best = turn === 0 ? -Infinity : Infinity;
-          function consider(v){ if(turn === 0 ? v > best : v < best) best = v; }
-          consider(solve(rank, owner, dbl, passes + 1, 1 - turn)); // pass
-          if(rank >= 0 && owner !== turn && dbl === 0) consider(solve(rank, owner, 1, 0, 1 - turn)); // double
-          if(rank >= 0 && owner === turn && dbl === 1) consider(solve(rank, owner, 2, 0, 1 - turn)); // redouble
-          for(var r = rank + 1; r < 35; r++) consider(solve(r, turn, 0, 0, 1 - turn)); // any higher bid
-          memo[key] = best;
-          return best;
-        }
-        var value = solve(-1, -1, 0, 0, firstTurn);
-        // Final contracts reachable when both sides play optimally.
-        var found = {}, seen = {};
-        function collect(rank, owner, dbl, passes, turn){
-          var key = rank + "|" + owner + "|" + dbl + "|" + passes + "|" + turn;
-          if(seen[key]) return;
-          seen[key] = true;
-          if(rank >= 0 && passes >= 2){ found[rank + "|" + owner + "|" + dbl] = true; return; }
-          if(rank < 0 && passes >= 3) return;
-          var target = solve(rank, owner, dbl, passes, turn);
-          function follow(nr, no, nd, np, nt){
-            if(solve(nr, no, nd, np, nt) === target) collect(nr, no, nd, np, nt);
-          }
-          follow(rank, owner, dbl, passes + 1, 1 - turn);
-          if(rank >= 0 && owner !== turn && dbl === 0) follow(rank, owner, 1, 0, 1 - turn);
-          if(rank >= 0 && owner === turn && dbl === 1) follow(rank, owner, 2, 0, 1 - turn);
-          for(var r = rank + 1; r < 35; r++) follow(r, turn, 0, 0, 1 - turn);
-        }
-        collect(-1, -1, 0, 0, firstTurn);
-        var contracts = [];
-        Object.keys(found).forEach(function(k){
-          var parts = k.split("|"), rk = parseInt(parts[0],10), ow = parseInt(parts[1],10), db = parseInt(parts[2],10);
-          var lv = Math.floor(rk / 5) + 1, st = PAR_STRAINS[rk % 5];
-          bestDeclarers[sides[ow]][st].forEach(function(seat){
-            contracts.push({rank: rk, dbl: db, seat: seat, side: sides[ow],
-              making: bestTricks[sides[ow]][st] >= lv + 6,
-              text: lv + (st === "NT" ? "NT" : SUIT_SYM[st]) + " " + seat + (db === 1 ? " X" : db === 2 ? " XX" : "")});
-          });
-        });
-        // DDS-style selection. The raw equilibrium terminals include
-        // many weakly-equal also-rans (any EW contract that happens to
-        // cost exactly the par amount, say) which DDS never reports.
-        // Making contracts are par candidates as they stand; a failing
-        // contract counts only as a sacrifice — the cheapest one that
-        // outbids the opponents' best making contract (the contract it
-        // is sacrificing against), and only when that contract would
-        // otherwise beat the par value for the opponents.
-        var kept = contracts.filter(function(c){ return c.making; });
-        ["NS","EW"].forEach(function(s){
-          var mine = contracts.filter(function(c){ return !c.making && c.side === s; });
-          if(!mine.length) return;
-          var opp = s === "NS" ? "EW" : "NS";
-          var oppValue = opp === "NS" ? value : -value;
-          var thr = -1, thrScore = -Infinity;
-          for(var r = 0; r < 35; r++){
-            var lv2 = Math.floor(r / 5) + 1, st2 = PAR_STRAINS[r % 5];
-            if(bestTricks[opp][st2] < lv2 + 6) continue;
-            var sc = scoreTab[r][sides.indexOf(opp)][0];
-            var oppScore = opp === "NS" ? sc : -sc;
-            if(oppScore > thrScore || (oppScore === thrScore && r > thr)){ thrScore = oppScore; thr = r; }
-          }
-          if(thrScore <= oppValue) return;
-          var cands = mine.filter(function(c){ return c.rank > thr; });
-          var pool = cands.length ? cands : mine;
-          var minRank = Math.min.apply(null, pool.map(function(c){ return c.rank; }));
-          pool.forEach(function(c){ if(c.rank === minRank) kept.push(c); });
-        });
-        if(!kept.length) kept = contracts;
-        // DDS-style tidy-up: when an overtrick makes a lower contract
-        // score the same as a higher one in the same strain (1NT and
-        // 2NT both 120, say), par is the higher contract — keep only
-        // the highest level per side / strain / double.
-        var maxRank = {};
-        kept.forEach(function(c){
-          var kk = c.side + "|" + (c.rank % 5) + "|" + c.dbl;
-          if(maxRank[kk] === undefined || c.rank > maxRank[kk]) maxRank[kk] = c.rank;
-        });
-        var list = kept.filter(function(c){
-          return c.rank === maxRank[c.side + "|" + (c.rank % 5) + "|" + c.dbl];
-        });
-        list.sort(function(a, b2){ return a.rank - b2.rank || (a.seat < b2.seat ? -1 : 1); });
-        return {value: value, contracts: list.map(function(c){ return c.text; })};
+      // ---- The par auction, played out over the DD table ----
+      // The side that does not own the current contract looks for a
+      // move that strictly improves its own score:
+      //   - bid a higher contract. A contract that makes stands
+      //     undoubled (doubling a making contract only ever helps
+      //     declarer, so it is never a par move). A FAILING contract
+      //     is entered DOUBLED: against a failing contract the
+      //     opponents double whenever doubling beats passing it, and
+      //     the doubled penalty is always the larger one, so a
+      //     sacrifice is only ever worth its doubled cost — they may
+      //     still bid on over it instead of collecting the penalty,
+      //     which their own next turn decides.
+      //   - double the current contract (it wins the turn only when
+      //     the doubled result beats every bid, by the same test).
+      // The owner of a doubled contract may run to a higher contract
+      // on the same terms. Redoubles never occur: redoubling a
+      // failing contract only deepens the penalty, and a making
+      // contract is never doubled in the first place.
+      // Because a failing contract can only ever become final in its
+      // doubled form, an undoubled down-contract whose undoubled
+      // penalty merely happens to equal the par score can never be
+      // reported: on DreamlandCup_R2 board 1, 5♥ undoubled is -300
+      // but 5♥ doubled is -1400, so it is never the cheapest
+      // sacrifice over EW's 5♣ — 5♠ X at -300 is, and the auction
+      // below lands exactly there.
+      function sideScore(rank, owner, dbl, side){
+        var v = scoreTab[rank][owner][dbl];
+        return side === 0 ? v : -v;
       }
-      var chosen = runGame(0);
-      // SidesPar-style check with the other side to move first: the
-      // two agree except in rare symmetric cases; if they disagree,
-      // prefer the line whose score matches the file's OptimumScore.
-      var other = runGame(1);
+      function rankMakes(rank, sideIdx){
+        var lv = Math.floor(rank / 5) + 1, st = PAR_STRAINS[rank % 5];
+        return bestTricks[sides[sideIdx]][st] >= lv + 6;
+      }
+      // A side's best making contract: highest own score, ties to the
+      // higher rank (DDS reports the higher of two contracts that
+      // score the same — 4♠ making an overtrick and 5♠ both 650, say).
+      function bestMaking(sideIdx){
+        var best = null;
+        for(var r = 0; r < 35; r++){
+          if(!rankMakes(r, sideIdx)) continue;
+          var sc = sideScore(r, sideIdx, 0, sideIdx);
+          if(!best || sc > best.score || (sc === best.score && r > best.rank)) best = {rank: r, score: sc};
+        }
+        return best;
+      }
+      // Play the auction out from an opening position: openRank null
+      // is the passed-out start, otherwise that undoubled contract is
+      // already on the table, owned by openSide (0 = NS, 1 = EW).
+      function runAuction(openRank, openSide){
+        var cur = openRank === null ? null : {rank: openRank, owner: openSide, dbl: 0};
+        for(var guard = 0; guard < 200; guard++){
+          var value = cur ? scoreTab[cur.rank][cur.owner][cur.dbl] : 0;
+          var actors = cur ? [1 - cur.owner] : [0, 1];
+          var move = null;
+          for(var ai = 0; ai < actors.length && !move; ai++){
+            var me = actors[ai];
+            var myNow = me === 0 ? value : -value;
+            var bestMove = null;
+            function tryMove(rank, owner, dbl){
+              var own = sideScore(rank, owner, dbl, me);
+              if(own > myNow && (!bestMove || own > bestMove.own || (own === bestMove.own && rank > bestMove.rank)))
+                bestMove = {rank: rank, owner: owner, dbl: dbl, own: own};
+            }
+            if(cur && cur.dbl === 0) tryMove(cur.rank, cur.owner, 1); // double the contract on the table
+            for(var r = (cur ? cur.rank : -1) + 1; r < 35; r++)
+              tryMove(r, me, rankMakes(r, me) ? 0 : 1); // makers stand undoubled, failers are doubled
+            move = bestMove;
+          }
+          if(!move) break;
+          cur = {rank: move.rank, owner: move.owner, dbl: move.dbl};
+        }
+        if(!cur) return {value: 0, contracts: []};
+        var lv = Math.floor(cur.rank / 5) + 1, st = PAR_STRAINS[cur.rank % 5];
+        var texts = bestDeclarers[sides[cur.owner]][st].map(function(seat){
+          return lv + (st === "NT" ? "NT" : SUIT_SYM[st]) + " " + seat + (cur.dbl === 1 ? " X" : "");
+        });
+        return {value: scoreTab[cur.rank][cur.owner][cur.dbl], contracts: texts};
+      }
+      var chosen = runAuction(null, -1);
+      // SidesPar-style cross-check with EW's best making contract
+      // opened instead: the two lines agree except in rare symmetric
+      // cases; if they disagree, prefer the line whose score matches
+      // the file's OptimumScore.
       var fileScore = parFileScoreNS(b);
-      if(other.value !== chosen.value && fileScore !== null && other.value === fileScore) chosen = other;
+      var ewBest = bestMaking(1);
+      if(ewBest){
+        var alt = runAuction(ewBest.rank, 1);
+        if(alt.value !== chosen.value && fileScore !== null && alt.value === fileScore) chosen = alt;
+      }
       b._parCalc = {
         scoreNS: chosen.value,
         contracts: chosen.contracts,
@@ -3451,14 +3450,22 @@
         : "请先在下方上传 PBN 文件或粘贴 PBN 内容；上传后，这里会从文件里解析出所有队伍及其比赛。";
       var html = "";
       fileMatches.forEach(function(m, i){
+        // Winning team (more IMPs won than the opponents) is shown red
+        // and bold; a tie colours neither name. The IMP / VP scores in
+        // this list are never coloured and are written with spaces
+        // around the colon ("92 : 25", "19.99 : 0.01"); m.impText /
+        // m.vpText themselves are untouched (tab 2's match header
+        // still uses the compact form).
+        var homeWin = m.impFor !== null && m.impAgainst !== null && m.impFor > m.impAgainst;
+        var awayWin = m.impFor !== null && m.impAgainst !== null && m.impAgainst > m.impFor;
         html += '<tr data-mi="' + i + '" tabindex="0" role="button" aria-label="打开比赛 ' + esc(matchDisplayHome(m)) + " 对 " + esc(matchDisplayAway(m)) + '">'
-          + '<td><span class="team-name">' + esc(matchDisplayHome(m)) + "</span>"
+          + '<td><span class="team-name' + (homeWin ? " winner" : "") + '">' + esc(matchDisplayHome(m)) + "</span>"
           + (!m.named ? ' <span class="tag">文件未标注队伍</span>' : "")
           + "</td>"
-          + '<td><span class="team-name">' + esc(matchDisplayAway(m)) + "</span></td>"
+          + '<td><span class="team-name' + (awayWin ? " winner" : "") + '">' + esc(matchDisplayAway(m)) + "</span></td>"
           + "<td>" + m.boardNumbers + "</td>"
-          + '<td class="imp ' + (m.imp > 0 ? "win" : m.imp < 0 ? "lose" : "") + '">' + esc(m.impText) + "</td>"
-          + '<td class="vp">' + esc(m.vpText) + "</td></tr>";
+          + '<td class="imp">' + esc(m.impText.replace(":", " : ")) + "</td>"
+          + '<td class="vp">' + esc(m.vpText.replace(":", " : ")) + "</td></tr>";
       });
       $("matchRows").innerHTML = html;
       $("matchRows").querySelectorAll("tr").forEach(function(row){
@@ -3502,7 +3509,7 @@
        sample boards are presented as if they came from a file. The
        sample is still available on demand via 载入示例牌局 on tab 1. */
     showMatchesView();
-
+    
 /* Render PBN selector: list files from /api/pbn-list, load via loadText.
        Auto-load behaviour: this page starts with no file loaded (the
        "No preload" note below), so if the list is non-empty one file
